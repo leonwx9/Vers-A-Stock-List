@@ -1,0 +1,101 @@
+# universe.yaml — THE asset universe. The rest of the app only knows what's
+# listed here, so expanding to more stocks (or adding crypto later) means
+# editing this file, not the code.
+#
+# Each entry:
+#   symbol — the ticker
+#   name   — human-readable name
+#   type   — stock | etf   (a future "crypto" type slots in the same way)
+#   flags  — optional risk labels: leveraged / inverse / volatility.
+#            Flagged products are analysed but EXCLUDED from the shortlist and
+#            paper portfolio (see rules.yaml) — they behave very differently
+#            from normal shares.
+#
+# Source: STOCK_LIST.md (CMC Invest US single-share list, verified 2026-06-10).
+
+assets:
+  - { symbol: MSFT,  name: Microsoft Corp,                        type: stock }
+  - { symbol: INTC,  name: Intel Corp,                            type: stock }
+  - { symbol: AMD,   name: Advanced Micro Devices,                type: stock }
+  - { symbol: AAPL,  name: Apple,                                 type: stock }
+  - { symbol: TSLA,  name: Tesla,                                 type: stock }
+  - { symbol: SMCI,  name: Super Micro Computer,                  type: stock }
+  - { symbol: AMZN,  name: Amazon.com,                            type: stock }
+  - { symbol: TSM,   name: Taiwan Semiconductor Manufacturing,    type: stock }
+  - { symbol: BRK/B, name: Berkshire Hathaway,                    type: stock }
+  - { symbol: MSTR,  name: MicroStrategy,                         type: stock }
+  - { symbol: META,  name: Meta Platforms,                        type: stock }
+  - { symbol: VOO,   name: Vanguard S&P 500 ETF,                  type: etf }
+  - { symbol: NVDA,  name: NVIDIA Corp,                           type: stock }
+  - { symbol: BABA,  name: Alibaba Group Holding,                 type: stock }
+  - { symbol: PLTR,  name: Palantir Technologies,                 type: stock }
+  - { symbol: GOOGL, name: Alphabet (Class A),                    type: stock }
+  - { symbol: GOOG,  name: Alphabet (Class C),                    type: stock }
+  - { symbol: COIN,  name: Coinbase Global,                       type: stock }
+  - { symbol: PYPL,  name: PayPal Holdings,                       type: stock }
+  - { symbol: DIS,   name: Walt Disney Co,                        type: stock }
+  - { symbol: BA,    name: Boeing Company,                        type: stock }
+  - { symbol: NKE,   name: Nike,                                  type: stock }
+  - { symbol: SOFI,  name: SoFi Technologies,                     type: stock }
+  - { symbol: CRWD,  name: CrowdStrike Holdings,                  type: stock }
+  - { symbol: SHOP,  name: Shopify,                               type: stock }
+  - { symbol: NVO,   name: Novo Nordisk A/S,                      type: stock }
+  - { symbol: PFE,   name: Pfizer,                                type: stock }
+  - { symbol: ARM,   name: Arm Holdings PLC,                      type: stock }
+  - { symbol: V,     name: Visa,                                  type: stock }
+  - { symbol: GME,   name: GameStop Corp,                         type: stock }
+  - { symbol: COST,  name: Costco Wholesale Corp,                 type: stock }
+  - { symbol: NFLX,  name: Netflix,                               type: stock }
+  - { symbol: BAC,   name: Bank of America Corp,                  type: stock }
+  - { symbol: ADBE,  name: Adobe,                                 type: stock }
+  - { symbol: SNOW,  name: Snowflake Inc,                         type: stock }
+  - { symbol: RIOT,  name: Riot Platforms,                        type: stock }
+  - { symbol: UBER,  name: Uber Technologies,                     type: stock }
+  - { symbol: JD,    name: JD.com,                                type: stock }
+  - { symbol: RIVN,  name: Rivian Automotive,                     type: stock }
+  - { symbol: NIO,   name: NIO Inc,                               type: stock }
+  - { symbol: ABNB,  name: Airbnb,                                type: stock }
+  - { symbol: XYZ,   name: Block Inc,                             type: stock }
+  - { symbol: CCL,   name: Carnival Corp,                         type: stock }
+  - { symbol: SCHD,  name: Schwab US Dividend Equity ETF,         type: etf }
+  - { symbol: SPOT,  name: Spotify Technology SA,                 type: stock }
+  - { symbol: GE,    name: GE Aerospace,                          type: stock }
+  - { symbol: MRNA,  name: Moderna,                               type: stock }
+  - { symbol: PANW,  name: Palo Alto Networks,                    type: stock }
+  - { symbol: JPM,   name: JPMorgan Chase & Co,                   type: stock }
+  - { symbol: RDDT,  name: Reddit,                                type: stock }
+  - { symbol: CRM,   name: Salesforce,                            type: stock }
+  - { symbol: HD,    name: Home Depot,                            type: stock }
+  - { symbol: KO,    name: Coca-Cola Company,                     type: stock }
+  - { symbol: NOC,   name: Northrop Grumman Corp,                 type: stock }
+  - { symbol: PBR/A, name: Petroleo Brasileiro SA (Petrobras) ADS, type: stock }
+  - { symbol: SOXL,  name: Direxion Daily Semiconductor Bull 3X,  type: etf, flags: [leveraged] }
+  - { symbol: SQQQ,  name: ProShares UltraPro Short QQQ,          type: etf, flags: [leveraged, inverse] }
+  - { symbol: TMF,   name: Direxion Daily 20+ Yr Treasury Bull 3X, type: etf, flags: [leveraged] }
+  - { symbol: TQQQ,  name: ProShares UltraPro QQQ,                type: etf, flags: [leveraged] }
+  - { symbol: VXX,   name: iPath B S&P 500 VIX Short-Term Futures, type: etf, flags: [volatility] }
+  - { symbol: MU,    name: Micron Technology Inc,                 type: stock }
+  - { symbol: TEM,   name: Tempus AI Inc,                         type: stock }
+  - { symbol: MSTU,  name: T-Rex 2X Long MSTR Daily ETF,          type: etf, flags: [leveraged] }
+  - { symbol: VTI,   name: Vanguard Total Stock Market ETF,       type: etf }
+  - { symbol: QCOM,  name: Qualcomm Inc,                          type: stock }
+  - { symbol: HOOD,  name: Robinhood Markets Inc,                 type: stock }
+  - { symbol: TTD,   name: Trade Desk Inc (Class A),              type: stock }
+  - { symbol: ANET,  name: Arista Networks Inc,                   type: stock }
+  - { symbol: IBIT,  name: iShares Bitcoin Trust ETF,             type: etf }
+  - { symbol: RGTI,  name: Rigetti Computing Inc,                 type: stock }
+  - { symbol: RKLB,  name: Rocket Lab USA Inc,                    type: stock }
+  - { symbol: TSLL,  name: Direxion Daily TSLA Bull 2X,           type: etf, flags: [leveraged] }
+  - { symbol: ASTS,  name: AST SpaceMobile Inc,                   type: stock }
+  - { symbol: HIMS,  name: Hims & Hers Health Inc,                type: stock }
+  - { symbol: SMH,   name: VanEck Semiconductor ETF,              type: etf }
+  - { symbol: ELF,   name: e.l.f. Beauty Inc,                     type: stock }
+  - { symbol: UNH,   name: UnitedHealth Group Inc,                type: stock }
+  - { symbol: AVGO,  name: Broadcom Inc,                          type: stock }
+  - { symbol: APP,   name: AppLovin Corp (Class A),               type: stock }
+  - { symbol: TTWO,  name: Take-Two Interactive Software,         type: stock }
+  - { symbol: CL,    name: Colgate-Palmolive Co,                  type: stock }
+  - { symbol: OXY,   name: Occidental Petroleum Corp,             type: stock }
+  - { symbol: TMC,   name: TMC the Metals Co Inc,                 type: stock }
+  - { symbol: VRT,   name: Vertiv Holdings Co (Class A),          type: stock }
+  - { symbol: WMT,   name: Walmart Inc,                           type: stock }

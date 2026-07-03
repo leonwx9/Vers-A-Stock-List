@@ -1,0 +1,23 @@
+# rules.yaml — the tunable rules the app reads. Changing behaviour later
+# (bigger portfolio, different filters) means editing here, not the code.
+
+portfolio:
+  starting_cash: 10000        # pretend money the paper portfolio starts with (USD)
+  whole_shares_only: true     # CMC Invest sells whole shares only — mirror that
+  max_position_value: 800     # max USD per pick — mirrors CMC's $1,200 AUD cap (~US$800)
+  # Risk flags the paper portfolio and shortlist refuse to buy. These products
+  # decay/swing in ways that would make the results misleading. Remove a flag
+  # from this list to allow it again. (Decision from CLAUDE.md's Phase 2 reminder.)
+  excluded_flags: [leveraged, inverse, volatility]
+  shortlist_size: 5           # how many top picks make the shortlist
+
+analysis:
+  batch_size: 10              # tickers sent to the AI per request (fewer = slower + pricier)
+  history_days: 120           # how much price history to generate/consider
+  max_workers: 3              # AI requests running at the same time
+
+# AI Pivot Scanner rules (used from milestone 5 onwards).
+scanner:
+  max_market_cap: 1000000000  # "small-cap": under ~$1B
+  excluded_sectors: [Technology]  # non-tech companies only
+  lookback_days: 30           # how recent a disclosure must be to count
