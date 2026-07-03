@@ -17,8 +17,9 @@ analysis:
   history_days: 120           # how much price history to generate/consider
   max_workers: 3              # AI requests running at the same time
 
-# AI Pivot Scanner rules (used from milestone 5 onwards).
+# AI Pivot Scanner rules.
 scanner:
   max_market_cap: 1000000000  # "small-cap": under ~$1B
   excluded_sectors: [Technology]  # non-tech companies only
   lookback_days: 30           # how recent a disclosure must be to count
+  max_candidates: 8           # filings examined per scan (each costs 1 AI request)
