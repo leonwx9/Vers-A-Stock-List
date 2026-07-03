@@ -5,3 +5,5 @@ flask==3.0.3          # the small web server that powers the dashboard
 python-dotenv==1.0.1  # reads settings/keys from the .env file
 requests==2.32.3      # makes calls to outside services (EDGAR, the AI, prices)
 PyYAML==6.0.2         # reads the .yaml config files (universe, rules)
+anthropic             # Anthropic's official library (used when LLM_PROVIDER=anthropic)
+pytest                # runs the automated tests (tests/ folder)
