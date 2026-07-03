@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ asset.symbol }} — Vers A</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <!-- TradingView Lightweight Charts™ (Apache-2.0), served from our own
+       static folder so the page works offline. -->
+  <script src="{{ url_for('static', filename='vendor/lightweight-charts.standalone.production.js') }}"></script>
+</head>
+<body>
+
+  <header class="site-header">
+    <a class="wordmark" href="/">Vers A</a>
+    <span class="header-note">paper trading · no investment advice</span>
+  </header>
+
+  <main class="ticker-page">
+
+    <!-- ── Title block: symbol, name, live-ish price ─────────────────── -->
+    <div class="ticker-title">
+      <div>
+        <h1>{{ asset.symbol }}
+          {% for flag in asset.flags %}<span class="flag-tag">{{ flag }}</span>{% endfor %}
+        </h1>
+        <p class="ticker-name">{{ asset.name }}</p>
+      </div>
+      <div class="ticker-price-block">
+        <div class="ticker-price" id="big-price">—</div>
+        <div class="ticker-change" id="big-change"></div>
+      </div>
+    </div>
+
+    <!-- ── Chart card ────────────────────────────────────────────────── -->
+    <section class="panel">
+      <div class="chart-controls">
+        <!-- Time ranges, like the Stocks app -->
+        <div class="seg-group" id="range-group">
+          <button class="seg" data-days="30">1M</button>
+          <button class="seg" data-days="90">3M</button>
+          <button class="seg active" data-days="180">6M</button>
+          <button class="seg" data-days="365">1Y</button>
+        </div>
+        <!-- Line ↔ candles toggle -->
+        <div class="seg-group" id="type-group">
+          <button class="seg active" data-type="line">Line</button>
+          <button class="seg" data-type="candles">Candles</button>
+        </div>
+      </div>
+      <div id="chart" class="chart-box"></div>
+      <p class="fine-print" id="chart-note"></p>
+    </section>
+
+    <!-- ── Why this rating (the deep dive) ───────────────────────────── -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Why this rating</h2>
+        <button id="deep-dive-btn" class="action-btn">Generate deep dive</button>
+      </div>
+      <p id="deep-dive-status" class="status-line"></p>
+      <div id="deep-dive"></div>
+    </section>
+
+    <!-- ── Statistics grid, like the Stocks app ──────────────────────── -->
+    <section class="panel">
+      <h2>Statistics</h2>
+      <div id="stats-grid" class="stats-grid"></div>
+      <p class="fine-print">Market cap and P/E need live market data — they arrive
+        with milestone 6.</p>
+    </section>
+
+    <!-- ── News ──────────────────────────────────────────────────────── -->
+    <section class="panel">
+      <h2>News</h2>
+      <div id="news-list"></div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    Local dashboard · charts by TradingView Lightweight Charts™ · no investment advice
+  </footer>
+
+  <script>
+    // Hand the ticker symbol from Flask to the JavaScript below.
+    // tojson makes it safe even for symbols with special characters.
+    const SYMBOL = {{ asset.symbol | tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='ticker.js') }}"></script>
+</body>
+</html>
