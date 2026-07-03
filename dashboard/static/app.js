@@ -11,6 +11,11 @@ let currentRows = [];                       // the rows currently displayed
 let sortState = { key: "conviction", dir: -1 };  // default: best score first
 let filterText = "";
 
+// Collapse preferences survive page reloads via localStorage (a tiny
+// key-value store the browser keeps per site).
+let tableCollapsed = localStorage.getItem("collapse-tickers") === "1";
+let holdingsCollapsed = localStorage.getItem("collapse-holdings") === "1";
+
 /* ── 1. Load whatever analysis already exists ─────────────────────────── */
 async function loadExisting() {
   const res = await fetch("/api/analysis");
@@ -98,6 +103,17 @@ function renderShortlist(data) {
 }
 
 function renderTable() {
+  // When collapsed, show just the heading with a "Show" button.
+  if (tableCollapsed) {
+    document.getElementById("analysis-table").innerHTML = `
+      <div class="panel-header" style="margin-top:1rem">
+        <h3 class="subheading">All ${currentRows.length} tickers</h3>
+        <button id="toggle-table" class="mini-btn">Show</button>
+      </div>`;
+    wireTableToggle();
+    return;
+  }
+
   // Apply the search filter, then the current sort.
   const text = filterText.toLowerCase();
   const rows = currentRows
@@ -136,8 +152,11 @@ function renderTable() {
   document.getElementById("analysis-table").innerHTML = `
     <div class="panel-header" style="margin-top:1rem">
       <h3 class="subheading">All ${rows.length} tickers <span class="hint">(click a row to open its page)</span></h3>
-      <input id="filter-input" class="filter-input" type="search"
-             placeholder="Filter by ticker or name…" value="${filterText}">
+      <div class="btn-row">
+        <input id="filter-input" class="filter-input" type="search"
+               placeholder="Filter by ticker or name…" value="${filterText}">
+        <button id="toggle-table" class="mini-btn">Hide</button>
+      </div>
     </div>
     <table>
       <thead>
@@ -177,6 +196,17 @@ function renderTable() {
     const el = document.getElementById("filter-input");
     el.focus();
     el.setSelectionRange(el.value.length, el.value.length);
+  });
+
+  wireTableToggle();
+}
+
+/* The Hide/Show button for the big ticker table. */
+function wireTableToggle() {
+  document.getElementById("toggle-table").addEventListener("click", () => {
+    tableCollapsed = !tableCollapsed;
+    localStorage.setItem("collapse-tickers", tableCollapsed ? "1" : "0");
+    renderTable();
   });
 }
 
@@ -266,6 +296,21 @@ function renderHoldings(holdings) {
       then press “Sync to shortlist” to invest the pretend cash.</p>`;
     return;
   }
+
+  const toggleBtn = `<button id="toggle-holdings" class="mini-btn">
+    ${holdingsCollapsed ? "Show" : "Hide"}</button>`;
+
+  // When collapsed, show just the heading with a "Show" button.
+  if (holdingsCollapsed) {
+    box.innerHTML = `
+      <div class="panel-header">
+        <h3 class="subheading">Holdings (${holdings.length})</h3>
+        ${toggleBtn}
+      </div>`;
+    wireHoldingsToggle(holdings);
+    return;
+  }
+
   const rows = holdings.map((h) => `
     <tr class="main-row" data-symbol="${h.symbol}">
       <td><strong>${h.symbol}</strong></td>
@@ -280,7 +325,10 @@ function renderHoldings(holdings) {
     </tr>`).join("");
 
   box.innerHTML = `
-    <h3 class="subheading">Holdings</h3>
+    <div class="panel-header">
+      <h3 class="subheading">Holdings (${holdings.length})</h3>
+      ${toggleBtn}
+    </div>
     <table>
       <thead><tr>
         <th>Ticker</th><th>Shares</th><th>Paid</th><th>Now</th><th>Value</th><th>P / L</th><th></th>
@@ -290,6 +338,36 @@ function renderHoldings(holdings) {
 
   box.querySelectorAll(".main-row").forEach((row) =>
     row.addEventListener("click", () => openTicker(row.dataset.symbol)));
+  wireHoldingsToggle(holdings);
+}
+
+/* The Hide/Show button for the holdings table. */
+function wireHoldingsToggle(holdings) {
+  document.getElementById("toggle-holdings").addEventListener("click", () => {
+    holdingsCollapsed = !holdingsCollapsed;
+    localStorage.setItem("collapse-holdings", holdingsCollapsed ? "1" : "0");
+    renderHoldings(holdings);
+  });
 }
 
 loadPortfolio();
+
+/* ── Sidebar: highlight the section currently on screen ──────────────── */
+/* An IntersectionObserver tells us when each section crosses a band near
+   the top of the viewport; the matching sidebar link turns black. */
+const sideLinks = [...document.querySelectorAll(".side-link")];
+const observer = new IntersectionObserver(
+  (entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      sideLinks.forEach((link) =>
+        link.classList.toggle(
+          "active",
+          link.getAttribute("href") === `#${entry.target.id}`,
+        ));
+    });
+  },
+  { rootMargin: "-20% 0px -70% 0px" }, // the "reading band" near the top
+);
+["stock-searcher", "portfolio", "pivot-scanner"].forEach((id) =>
+  observer.observe(document.getElementById(id)));

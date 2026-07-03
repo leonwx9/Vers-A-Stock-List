@@ -393,3 +393,70 @@ th:hover { color: var(--ink); }
   flex-wrap: wrap;
   margin: 0.25rem 0 0.75rem;
 }
+
+/* ── Sidebar navigation ────────────────────────────────────────────── */
+/* Clicking a sidebar link glides to the section instead of jumping. */
+html { scroll-behavior: smooth; }
+
+/* Sections stop below the sticky header instead of hiding under it. */
+.panel { scroll-margin-top: 4.5rem; }
+
+/* Two columns: a slim nav rail on the left, the content on the right. */
+.layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 1.25rem;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+/* .layout now owns the outer spacing, so main only keeps its inner grid. */
+.layout main { padding: 0; margin: 0; max-width: none; }
+
+.sidebar {
+  position: sticky;
+  top: 4.25rem;              /* sits just below the sticky header */
+  align-self: start;         /* don't stretch to full column height */
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.side-link {
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s;
+}
+.side-link:hover { background: #ececec; color: var(--ink); }
+.side-link.active { background: var(--ink); color: var(--paper); }
+
+/* Small quiet button for collapsing tables. */
+.mini-btn {
+  font: inherit;
+  font-size: 0.75rem;
+  background: transparent;
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mini-btn:hover { background: var(--paper-dim); color: var(--ink); }
+
+/* On narrow screens the rail becomes a horizontal chip row up top. */
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; padding: 1rem; }
+  .sidebar {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 0.4rem;
+    padding-bottom: 0.25rem;
+  }
+  .side-link { white-space: nowrap; }
+}
