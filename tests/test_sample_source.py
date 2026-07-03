@@ -32,3 +32,21 @@ def test_quote_has_price_and_changes():
     quote = SampleSource().get_quote("MSFT")
     assert quote["price"] > 0
     assert "change_5d_pct" in quote and "change_30d_pct" in quote
+
+
+def test_ohlc_bars_are_internally_consistent():
+    # Every day's high must be the top of the bar and the low the bottom —
+    # otherwise candlestick charts would draw nonsense.
+    for day in SampleSource().get_history("AAPL", 120):
+        assert day["high"] >= max(day["open"], day["close"])
+        assert day["low"] <= min(day["open"], day["close"])
+        assert day["low"] > 0
+        assert day["volume"] > 0
+
+
+def test_stats_cover_the_apple_stocks_fields():
+    stats = SampleSource().get_stats("NVDA")
+    for field in ("open", "high", "low", "prev_close", "day_change_pct",
+                  "week52_high", "week52_low", "volume", "avg_volume_30d"):
+        assert field in stats
+    assert stats["week52_high"] >= stats["week52_low"]

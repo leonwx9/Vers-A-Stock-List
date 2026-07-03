@@ -7,6 +7,9 @@ chart). The walk is seeded from the ticker's name, so the same ticker always
 produces the same data — that makes the app stable to develop against and
 easy to test. Milestone 6 swaps this class for a live source behind the same
 PriceSource interface.
+
+Each day is a full OHLC bar (Open, High, Low, Close — what candlestick
+charts are drawn from) plus a trading volume.
 """
 
 import random
@@ -37,7 +40,6 @@ BASE_PRICES = {
     "CL": 95, "OXY": 55, "TMC": 4, "VRT": 110, "WMT": 90,
 }
 
-
 # How many days of fake history we always generate internally. Requests for
 # fewer days get the most recent slice of this one series — that way a 30-day
 # request and a 120-day request agree on what "yesterday's price" was.
@@ -57,16 +59,36 @@ class SampleSource(PriceSource):
         rng = random.Random(seed)
 
         # Unknown symbols (e.g. a test ticker) get a seed-derived base price.
-        price = BASE_PRICES.get(symbol, 10 + seed % 490)
+        close = BASE_PRICES.get(symbol, 10 + seed % 490)
+        # Typical daily volume, also seed-derived (5M–80M shares).
+        base_volume = 5_000_000 + seed % 75_000_000
 
-        # Walk forward one day at a time. Average drift is ~0, daily wobble
-        # ~2% — roughly what a typical stock does.
         today = date.today()
         history = []
         for i in range(FULL_SERIES_DAYS):
             day = today - timedelta(days=FULL_SERIES_DAYS - 1 - i)
-            price = max(0.5, price * (1 + rng.gauss(0.0005, 0.02)))
-            history.append({"date": day.isoformat(), "close": round(price, 2)})
+            prev_close = close
+
+            # The day's move: average drift ~0, daily wobble ~2% — roughly
+            # what a typical stock does.
+            close = max(0.5, prev_close * (1 + rng.gauss(0.0005, 0.02)))
+            # Open near yesterday's close; high/low wrap around open & close.
+            open_ = max(0.5, prev_close * (1 + rng.gauss(0, 0.005)))
+            hi_lo_pad = abs(rng.gauss(0, 0.008))
+            high = max(open_, close) * (1 + hi_lo_pad)
+            low = min(open_, close) * (1 - hi_lo_pad)
+            # Busier days on bigger moves — like real markets.
+            move_pct = abs(close - prev_close) / prev_close
+            volume = int(base_volume * (0.7 + rng.random() * 0.6 + move_pct * 20))
+
+            history.append({
+                "date": day.isoformat(),
+                "open": round(open_, 2),
+                "high": round(high, 2),
+                "low": round(low, 2),
+                "close": round(close, 2),
+                "volume": volume,
+            })
 
         # Hand back only the most recent `days` entries.
         return history[-days:]
