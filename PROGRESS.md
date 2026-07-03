@@ -15,9 +15,20 @@
   - Front end: Run button, shortlist cards, clickable 85-row table
   - 13 automated tests pass (`./venv/bin/python -m pytest tests/`)
 
+- **M3 confirmed** — first real analysis run done with Leon's OpenRouter key.
+- **M3.5 — Ticker detail pages + UI overhaul** (Leon's request):
+  - Every ticker now has its own page (`/ticker/AAPL`): price chart with
+    1M/3M/6M/1Y ranges and a line ↔ candles toggle, Apple-Stocks-style
+    statistics grid, live news headlines (Google News RSS, free/no key),
+    and a plain-English "Why this rating" deep dive — Danelfin-style
+    technical/sentiment/fundamentals scores where sentiment claims must cite
+    the actual fetched headlines. Deep dives are cached; Refresh re-generates.
+  - UI overhaul: sticky frosted header, hairline-bordered cards, segmented
+    controls, score bars, table search + column sorting, skeleton loading.
+    Charts via vendored TradingView Lightweight Charts™ (works offline).
+  - Charts show sample prices until milestone 6 swaps in live data.
+
 ## Next
-- Leon pastes his OpenRouter key into `.env`, then we do the first real
-  analysis run and confirm M3 on screen.
 - M4: paper-trading portfolio + total-value graph (sample data).
 - M5: AI Pivot Scanner (SEC EDGAR + skeptical analysis).
 - M6: swap sample prices for live data (one ticker first).
