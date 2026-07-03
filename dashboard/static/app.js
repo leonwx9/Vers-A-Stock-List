@@ -122,7 +122,6 @@ function renderTable() {
         <td class="col-name">${r.name}</td>
         <td>$${r.price}</td>
         <td class="${changeClass}">${r.change_30d_pct >= 0 ? "+" : ""}${r.change_30d_pct}%</td>
-        <td>${r.verdict}</td>
         <td>
           <div class="cell-score">
             <div class="score-bar"><div class="score-bar-fill" style="width:${r.conviction * 10}%"></div></div>
@@ -147,7 +146,6 @@ function renderTable() {
           <th data-sort="name" class="col-name">Name${arrow("name")}</th>
           <th data-sort="price">Price${arrow("price")}</th>
           <th data-sort="change_30d_pct">30d${arrow("change_30d_pct")}</th>
-          <th data-sort="verdict">Verdict${arrow("verdict")}</th>
           <th data-sort="conviction">Score${arrow("conviction")}</th>
           <th></th>
         </tr>
@@ -183,3 +181,115 @@ function renderTable() {
 }
 
 loadExisting();
+
+/* ── Paper Portfolio panel ────────────────────────────────────────────── */
+const pfStatus = document.getElementById("portfolio-status");
+let pfChart = null;
+let pfSeries = null;
+
+async function loadPortfolio() {
+  const res = await fetch("/api/portfolio");
+  renderPortfolio(await res.json());
+}
+
+document.getElementById("sync-btn").addEventListener("click", async () => {
+  pfStatus.textContent = "Syncing the portfolio to the shortlist…";
+  const res = await fetch("/api/portfolio/sync", { method: "POST" });
+  const data = await res.json();
+  if (data.status === "ok") {
+    const n = data.trades_made.length;
+    pfStatus.textContent = n
+      ? `Done — ${n} trade${n > 1 ? "s" : ""}: ` +
+        data.trades_made.map((t) => `${t.action} ${t.shares} ${t.symbol}`).join(", ")
+      : "Done — already in sync, no trades needed.";
+    renderPortfolio(data);
+  } else {
+    pfStatus.textContent = "⚠ " + data.message;
+  }
+});
+
+document.getElementById("reset-btn").addEventListener("click", async () => {
+  // confirm() pops the browser's built-in "are you sure?" box.
+  if (!confirm("Reset the paper portfolio back to $10,000 cash? " +
+               "All pretend holdings and history will be wiped.")) return;
+  const res = await fetch("/api/portfolio/reset", { method: "POST" });
+  pfStatus.textContent = "Portfolio reset.";
+  renderPortfolio(await res.json());
+});
+
+function renderPortfolio(data) {
+  // The big number + change since the $10,000 start.
+  document.getElementById("pf-value").textContent =
+    "$" + data.total_value.toLocaleString("en-US", { minimumFractionDigits: 2 });
+  const changeEl = document.getElementById("pf-change");
+  changeEl.textContent =
+    `${data.since_start_pct >= 0 ? "+" : ""}${data.since_start_pct}% since start · ` +
+    `$${data.cash.toLocaleString("en-US", { minimumFractionDigits: 2 })} cash`;
+  changeEl.className = "ticker-change " + (data.since_start_pct >= 0 ? "up" : "down");
+
+  drawPortfolioChart(data.history);
+  renderHoldings(data.holdings);
+}
+
+function drawPortfolioChart(history) {
+  const box = document.getElementById("pf-chart");
+  if (!pfChart) {
+    pfChart = LightweightCharts.createChart(box, {
+      height: 220,
+      layout: { background: { color: "transparent" }, textColor: "#555555",
+                fontFamily: getComputedStyle(document.body).fontFamily },
+      grid: { vertLines: { visible: false }, horzLines: { color: "#ececec" } },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false },
+    });
+    // A soft grey area under a black line — still strictly greyscale.
+    pfSeries = pfChart.addAreaSeries({
+      lineColor: "#111111", lineWidth: 2,
+      topColor: "rgba(0,0,0,0.10)", bottomColor: "rgba(0,0,0,0.0)",
+      priceLineVisible: false,
+    });
+    new ResizeObserver(() => pfChart.applyOptions({ width: box.clientWidth }))
+      .observe(box);
+  }
+  pfSeries.setData(history.map((p) => ({ time: p.date, value: p.total_value })));
+  pfChart.timeScale().fitContent();
+
+  // One data point can't draw a line — explain that instead of looking broken.
+  document.getElementById("pf-chart").title =
+    history.length < 2 ? "The graph grows a point per day the app is used." : "";
+}
+
+function renderHoldings(holdings) {
+  const box = document.getElementById("pf-holdings");
+  if (!holdings.length) {
+    box.innerHTML = `<p class="status-line">No holdings yet — run an analysis,
+      then press “Sync to shortlist” to invest the pretend cash.</p>`;
+    return;
+  }
+  const rows = holdings.map((h) => `
+    <tr class="main-row" data-symbol="${h.symbol}">
+      <td><strong>${h.symbol}</strong></td>
+      <td>${h.shares}</td>
+      <td>$${h.avg_cost}</td>
+      <td>$${h.price}</td>
+      <td>$${h.value.toLocaleString("en-US")}</td>
+      <td class="${h.pl >= 0 ? "up" : "down"}">
+        ${h.pl >= 0 ? "+" : ""}$${h.pl.toLocaleString("en-US")} (${h.pl_pct >= 0 ? "+" : ""}${h.pl_pct}%)
+      </td>
+      <td class="row-chevron">›</td>
+    </tr>`).join("");
+
+  box.innerHTML = `
+    <h3 class="subheading">Holdings</h3>
+    <table>
+      <thead><tr>
+        <th>Ticker</th><th>Shares</th><th>Paid</th><th>Now</th><th>Value</th><th>P / L</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  box.querySelectorAll(".main-row").forEach((row) =>
+    row.addEventListener("click", () => openTicker(row.dataset.symbol)));
+}
+
+loadPortfolio();
