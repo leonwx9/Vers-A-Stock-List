@@ -35,8 +35,20 @@
   Holdings table with P/L; every trade logged; Reset button starts over.
   Leon's feedback applied: Verdict column removed from the table.
 
+- **Leon's UI requests**: sidebar navigation (Shortlist / Portfolio / Scanner)
+  with active-section highlighting; collapsible ticker + holdings tables;
+  Verdict column removed; emerald "market green" accent (#0f9d6e) on gains,
+  scores, buttons, charts — palette unlocked by Leon.
+- **M5 — AI Pivot Scanner**: searches EDGAR's full-text index (free, no key)
+  for AI-pivot language in recent 8-Ks, filters out tech-sector filers via
+  SEC's own classification, downloads each filing's AI passages, and runs a
+  skeptical AI read per candidate: announced vs executed, funding ability,
+  red flags, hype score 1-10. Non-qualifiers listed with reasons. Detection
+  is strictly after public disclosure. Note: market-cap check is AI-judged
+  until live data lands in M6. SEC rate-limit (403) and 5xx flakiness
+  handled with backoff + keep-alive session.
+
 ## Next
-- M5: AI Pivot Scanner (SEC EDGAR + skeptical analysis).
 - M6: swap sample prices for live data (one ticker first).
 - M7/M8: polish, README, handover guide.
 
