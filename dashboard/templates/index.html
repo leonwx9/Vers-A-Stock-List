@@ -18,11 +18,22 @@
   <main>
     <!-- ── Section 1: the Stock Searcher ─────────────────────────────── -->
     <section class="panel" id="stock-searcher">
-      <h2>Stock Searcher</h2>
-      <p class="panel-subtitle">85-ticker universe · bull vs bear · conviction scores · paper portfolio</p>
-      <div class="empty-state">
-        Nothing here yet — the analysis engine arrives in milestone&nbsp;3.
+      <div class="panel-header">
+        <div>
+          <h2>Stock Searcher</h2>
+          <p class="panel-subtitle">85-ticker universe · bull vs bear · conviction scores · paper portfolio</p>
+        </div>
+        <button id="run-analysis-btn" class="action-btn">Run analysis</button>
       </div>
+
+      <!-- Status line: shows "running…", errors, or when the last run happened. -->
+      <p id="analysis-status" class="status-line"></p>
+
+      <!-- Top picks appear here as cards. -->
+      <div id="shortlist"></div>
+
+      <!-- All 85 tickers appear here as a table (click a row for details). -->
+      <div id="analysis-table" class="table-wrap"></div>
     </section>
 
     <!-- ── Section 2: the AI Pivot Scanner ───────────────────────────── -->
@@ -39,5 +50,6 @@
     Local dashboard · sample data phase · no investment advice
   </footer>
 
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
