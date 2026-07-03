@@ -74,11 +74,15 @@
 
     <!-- ── Section 3: the AI Pivot Scanner ───────────────────────────── -->
     <section class="panel" id="pivot-scanner">
-      <h2>AI Pivot Scanner</h2>
-      <p class="panel-subtitle">Small-cap non-tech companies newly disclosing AI pivots · SEC EDGAR · skeptical analysis</p>
-      <div class="empty-state">
-        Nothing here yet — the scanner arrives in milestone&nbsp;5.
+      <div class="panel-header">
+        <div>
+          <h2>AI Pivot Scanner</h2>
+          <p class="panel-subtitle">Small-cap non-tech companies newly disclosing AI pivots · SEC EDGAR · skeptical analysis</p>
+        </div>
+        <button id="scan-btn" class="action-btn">Scan EDGAR</button>
       </div>
+      <p id="scanner-status" class="status-line"></p>
+      <div id="scanner-results"></div>
     </section>
   </main>
 

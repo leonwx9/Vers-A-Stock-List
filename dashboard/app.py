@@ -26,6 +26,8 @@ from dashboard.datasources.news_source import GoogleNewsSource
 from dashboard.datasources.sample_source import SampleSource
 from dashboard.llm.provider import MissingKeyError, get_provider
 from dashboard.portfolio.engine import PaperPortfolio
+from dashboard.scanner import pivot_scanner
+from dashboard.scanner.edgar import EdgarClient
 
 app = Flask(__name__)
 
@@ -33,6 +35,7 @@ app = Flask(__name__)
 prices = SampleSource()
 news = GoogleNewsSource()
 portfolio = PaperPortfolio(prices)
+edgar = EdgarClient()
 
 
 def find_asset(symbol):
@@ -96,6 +99,32 @@ def api_run_analysis():
         result = searcher.run_analysis(provider, prices)
     except Exception as e:
         return jsonify({"status": "error", "message": f"Analysis failed: {e}"}), 500
+
+    return jsonify({"status": "ok", **result})
+
+
+@app.route("/api/scanner")
+def api_scanner():
+    """Hand the browser the most recent pivot scan (or 'none yet')."""
+    result = pivot_scanner.load_latest()
+    if result is None:
+        return jsonify({"status": "none"})
+    return jsonify({"status": "ok", **result})
+
+
+@app.route("/api/scan", methods=["POST"])
+def api_scan():
+    """Run a fresh EDGAR scan for newly disclosed AI pivots.
+    Takes a minute or two: EDGAR searches + one AI request per candidate."""
+    try:
+        provider = get_provider()
+    except MissingKeyError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    try:
+        result = pivot_scanner.run_scan(provider, edgar)
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Scan failed: {e}"}), 500
 
     return jsonify({"status": "ok", **result})
 

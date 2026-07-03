@@ -371,3 +371,85 @@ const observer = new IntersectionObserver(
 );
 ["stock-searcher", "portfolio", "pivot-scanner"].forEach((id) =>
   observer.observe(document.getElementById(id)));
+
+/* ── AI Pivot Scanner panel ───────────────────────────────────────────── */
+const scanStatus = document.getElementById("scanner-status");
+const scanButton = document.getElementById("scan-btn");
+
+async function loadScanner() {
+  const res = await fetch("/api/scanner");
+  const data = await res.json();
+  if (data.status === "ok") {
+    renderScanner(data);
+  } else {
+    scanStatus.textContent =
+      "No scan yet — press “Scan EDGAR” to search recent SEC filings.";
+  }
+}
+
+scanButton.addEventListener("click", async () => {
+  scanButton.disabled = true;
+  scanStatus.textContent =
+    "Scanning EDGAR and reading filings — this takes a minute or two…";
+  document.getElementById("scanner-results").innerHTML =
+    `<div class="skeleton" style="height:180px"></div>`;
+  try {
+    const res = await fetch("/api/scan", { method: "POST" });
+    const data = await res.json();
+    if (data.status === "ok") {
+      renderScanner(data);
+    } else {
+      scanStatus.textContent = "⚠ " + data.message;
+      document.getElementById("scanner-results").innerHTML = "";
+    }
+  } catch (err) {
+    scanStatus.textContent = "⚠ Could not reach the server: " + err.message;
+    document.getElementById("scanner-results").innerHTML = "";
+  } finally {
+    scanButton.disabled = false;
+  }
+});
+
+function renderScanner(data) {
+  scanStatus.textContent =
+    `Last scan: ${data.run_at.replace("T", " ")} · last ${data.lookback_days} days ` +
+    `· ${data.candidates_checked} filings examined · ${data.hits.length} qualified`;
+
+  const cards = data.hits.map((h) => `
+    <div class="scan-card">
+      <div class="scan-head">
+        <div>
+          <span class="pick-symbol">${h.company}</span>
+          ${h.ticker ? `<span class="flag-tag">${h.ticker}</span>` : ""}
+          <div class="pick-name">${h.industry} · ${h.form} filed ${h.file_date}</div>
+        </div>
+        <span class="hype-badge" title="10 = pure hype, 1 = real substance">
+          hype ${h.hype_score}/10</span>
+      </div>
+      <p><strong>What they announced:</strong> ${h.what_they_announced}</p>
+      <p><strong>Announced vs executed:</strong> ${h.announced_vs_executed}</p>
+      <p><strong>Can they fund it:</strong> ${h.funding_ability}</p>
+      <div class="dd-block"><strong>Red flags</strong>
+        <ul>${h.red_flags.map((r) => `<li>${r}</li>`).join("")}</ul></div>
+      <p class="scan-bottom">${h.bottom_line}</p>
+      <a class="filing-link" href="${h.filing_url}" target="_blank" rel="noopener">
+        View the filing on SEC EDGAR →</a>
+    </div>`).join("");
+
+  // Companies that were checked but didn't qualify, tucked into a
+  // <details> element (a built-in HTML collapsible).
+  const excluded = data.excluded.length
+    ? `<details class="excluded-list">
+         <summary>${data.excluded.length} filings examined but excluded</summary>
+         <ul>${data.excluded.map((e) =>
+           `<li><strong>${e.company}</strong> — ${e.reason}</li>`).join("")}</ul>
+       </details>`
+    : "";
+
+  document.getElementById("scanner-results").innerHTML =
+    (cards || `<p class="status-line">No qualifying AI pivots found in the
+       last ${data.lookback_days} days — small-cap non-tech pivots are
+       genuinely rare, which is rather the point.</p>`) + excluded;
+}
+
+loadScanner();
