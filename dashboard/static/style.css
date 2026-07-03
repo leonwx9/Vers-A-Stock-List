@@ -1,20 +1,25 @@
 /* style.css — the entire look of the dashboard.
-   Locked palette: black, white, and greys only. No accent colours. */
+   Locked palette: black, white, and greys only. No accent colours.
 
-/* ── Colour palette, defined once ─────────────────────────────────────
-   CSS "variables" (the --names) let us name each grey once and reuse it
-   everywhere. Change a value here and the whole site updates. */
+   The layout follows a few principles borrowed from well-designed products
+   (Apple, Linear, Stripe): hierarchy comes from size/weight and whitespace
+   rather than heavy borders; spacing sticks to an 8px rhythm; and anything
+   interactive responds subtly to hover/press. */
+
+/* ── Design tokens: every colour/size defined once ─────────────────── */
 :root {
-  --ink: #111111;        /* near-black: main text */
-  --ink-soft: #555555;   /* mid grey: secondary text */
-  --line: #d9d9d9;       /* light grey: borders */
-  --paper: #ffffff;      /* white: card backgrounds */
-  --paper-dim: #f4f4f4;  /* faint grey: page background */
+  --ink: #111111;         /* near-black: main text */
+  --ink-soft: #6b6b6b;    /* mid grey: secondary text */
+  --line: #e6e6e6;        /* hairline borders */
+  --paper: #ffffff;       /* card backgrounds */
+  --paper-dim: #f7f7f7;   /* page background */
+  --radius: 16px;         /* card corner rounding */
+  --radius-sm: 10px;      /* buttons, small elements */
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
 }
 
-/* Apply a rounded sans-serif everywhere. The browser walks this list and
-   uses the first font it finds installed: ui-rounded works in Safari,
-   Arial Rounded MT ships with macOS, and the rest are safe fallbacks. */
+/* Rounded sans-serif everywhere. The browser picks the first installed one:
+   ui-rounded covers Safari, Arial Rounded MT ships with macOS. */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -27,132 +32,154 @@ body {
                -apple-system, sans-serif;
   background: var(--paper-dim);
   color: var(--ink);
-  line-height: 1.5;
+  line-height: 1.55;
+  font-size: 15px;
 }
 
-/* ── Header ─────────────────────────────────────────────────────────── */
+/* Numbers align vertically in tables/stats (like a spreadsheet). */
+td, .stat-value, .ticker-price { font-variant-numeric: tabular-nums; }
+
+/* ── Header: sticky, translucent, hairline — Apple-style ───────────── */
 .site-header {
-  background: var(--ink);
-  color: var(--paper);
-  padding: 1.5rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.9rem 1.5rem;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);        /* frosted-glass effect */
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
 }
 
-.site-header h1 {
-  font-size: 1.6rem;
-  letter-spacing: 0.02em;
+.wordmark {
+  font-size: 1.15rem;
+  font-weight: bold;
+  color: var(--ink);
+  text-decoration: none;
+  letter-spacing: 0.01em;
 }
 
-.tagline {
-  color: #bbbbbb; /* light grey so it sits quietly under the white title */
-  font-size: 0.9rem;
-  margin-top: 0.25rem;
+.header-note, .tagline {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
 }
 
-/* ── The two main panels ────────────────────────────────────────────── */
+/* ── Page column ───────────────────────────────────────────────────── */
 main {
   max-width: 1100px;
-  margin: 0 auto;        /* centres the content column on wide screens */
+  margin: 0 auto;
   padding: 1.5rem;
   display: grid;
-  gap: 1.5rem;           /* space between the two panels */
+  gap: 1.25rem;
 }
 
+/* ── Panels (the white cards) ──────────────────────────────────────── */
 .panel {
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 14px;   /* rounded corners to match the rounded font */
-  padding: 1.5rem;
+  border-radius: var(--radius);
+  padding: 1.5rem 1.75rem;
+  box-shadow: var(--shadow);
 }
 
-.panel h2 {
-  font-size: 1.2rem;
-}
+.panel h2 { font-size: 1.15rem; letter-spacing: -0.01em; }
 
 .panel-subtitle {
   color: var(--ink-soft);
   font-size: 0.85rem;
   margin-top: 0.2rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
-/* The dashed placeholder box shown while a section has no content yet. */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.subheading { font-size: 0.95rem; margin: 1.25rem 0 0.6rem; }
+.hint { color: var(--ink-soft); font-weight: normal; font-size: 0.8rem; }
+
 .empty-state {
   border: 2px dashed var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 2.5rem 1rem;
   text-align: center;
   color: var(--ink-soft);
   font-size: 0.95rem;
 }
 
-/* ── Footer ─────────────────────────────────────────────────────────── */
-.site-footer {
-  text-align: center;
-  color: var(--ink-soft);
-  font-size: 0.8rem;
-  padding: 1rem 0 2rem;
-}
-
-/* ── Phone-sized screens ────────────────────────────────────────────
-   Below 600px wide, shrink the padding so the panels use the full width. */
-@media (max-width: 600px) {
-  .site-header { padding: 1rem 1.25rem; }
-  main { padding: 1rem; }
-  .panel { padding: 1rem; }
-}
-
-/* ── Stock Searcher elements (milestone 3) ─────────────────────────── */
-
-/* Header row inside a panel: title on the left, action button on the right. */
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  flex-wrap: wrap;   /* button drops below the title on narrow screens */
-}
-
+/* ── Buttons ───────────────────────────────────────────────────────── */
 .action-btn {
   font: inherit;
+  font-size: 0.9rem;
   background: var(--ink);
   color: var(--paper);
   border: none;
-  border-radius: 10px;
-  padding: 0.55rem 1.2rem;
+  border-radius: 999px;              /* pill shape */
+  padding: 0.5rem 1.25rem;
   cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
 }
-
 .action-btn:hover { background: #333333; }
-.action-btn:disabled { background: #999999; cursor: wait; }
+.action-btn:active { transform: scale(0.97); }
+.action-btn:disabled { background: #9a9a9a; cursor: wait; }
 
 .status-line {
   color: var(--ink-soft);
   font-size: 0.85rem;
   min-height: 1.3em;
-  margin-bottom: 0.75rem;
+  margin: 0.25rem 0 0.5rem;
 }
 
-.subheading {
-  font-size: 1rem;
-  margin: 1rem 0 0.6rem;
+/* ── Segmented controls (chart range / line-candles toggle) ────────── */
+.seg-group {
+  display: inline-flex;
+  background: #efefef;
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
 }
 
-.hint { color: var(--ink-soft); font-weight: normal; font-size: 0.8rem; }
+.seg {
+  font: inherit;
+  font-size: 0.8rem;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 0.25rem 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
 
-/* ── Shortlist cards ────────────────────────────────────────────────── */
+.seg.active {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* ── Shortlist cards ───────────────────────────────────────────────── */
 .pick-grid {
   display: grid;
-  /* As many 240px-wide cards per row as fit; they stack on phones. */
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 0.75rem;
 }
 
 .pick-card {
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.9rem;
+  border-radius: var(--radius-sm);
+  padding: 1rem;
   font-size: 0.85rem;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
+.pick-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
 
 .pick-head { display: flex; justify-content: space-between; align-items: center; }
 .pick-symbol { font-size: 1.05rem; font-weight: bold; }
@@ -169,8 +196,20 @@ main {
   white-space: nowrap;
 }
 
-/* ── The all-tickers table ──────────────────────────────────────────── */
-/* The wrapper scrolls sideways on small screens instead of the page. */
+/* ── Filter box above the table ────────────────────────────────────── */
+.filter-input {
+  font: inherit;
+  font-size: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  width: 220px;
+  max-width: 100%;
+  background: var(--paper-dim);
+}
+.filter-input:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+/* ── The all-tickers table ─────────────────────────────────────────── */
 .table-wrap { overflow-x: auto; }
 
 table {
@@ -181,20 +220,26 @@ table {
 
 th, td {
   text-align: left;
-  padding: 0.45rem 0.6rem;
+  padding: 0.55rem 0.6rem;
   border-bottom: 1px solid var(--line);
 }
 
-th { color: var(--ink-soft); font-weight: normal; }
+th {
+  color: var(--ink-soft);
+  font-weight: normal;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;               /* headers sort the table */
+  user-select: none;
+  white-space: nowrap;
+}
+th:hover { color: var(--ink); }
 
-.main-row { cursor: pointer; }
+.main-row { cursor: pointer; transition: background 0.1s; }
 .main-row:hover { background: var(--paper-dim); }
 
-.detail-row td {
-  background: var(--paper-dim);
-  font-size: 0.82rem;
-}
-.detail-row p { margin: 0.25rem 0; }
+.row-chevron { color: var(--ink-soft); text-align: right; }
 
 /* Greyscale only: gains are solid black, losses are mid grey. */
 .up { color: var(--ink); }
@@ -206,9 +251,126 @@ th { color: var(--ink-soft); font-weight: normal; }
   padding: 0 0.3rem;
   font-size: 0.7rem;
   color: var(--ink-soft);
+  vertical-align: middle;
+  margin-left: 0.25rem;
 }
 
-/* Hide the long name column on phones to keep the table readable. */
+/* Small score bar used in table rows and deep-dive sections. */
+.score-bar {
+  background: #ececec;
+  border-radius: 999px;
+  height: 6px;
+  overflow: hidden;
+}
+.score-bar-fill { background: var(--ink); height: 100%; border-radius: 999px; }
+.cell-score { display: flex; align-items: center; gap: 0.5rem; min-width: 90px; }
+.cell-score .score-bar { flex: 1; }
+
+/* ── Skeleton shimmer while loading ────────────────────────────────── */
+.skeleton {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, #eeeeee 25%, #f6f6f6 50%, #eeeeee 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* ── Ticker detail page ────────────────────────────────────────────── */
+.ticker-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.25rem 0;
+}
+
+.ticker-title h1 { font-size: 1.7rem; letter-spacing: -0.02em; }
+.ticker-name { color: var(--ink-soft); }
+
+.ticker-price-block { text-align: right; }
+.ticker-price { font-size: 1.9rem; font-weight: bold; letter-spacing: -0.02em; }
+.ticker-change { font-size: 0.9rem; }
+
+.chart-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.chart-box { width: 100%; }
+
+.fine-print { color: var(--ink-soft); font-size: 0.75rem; margin-top: 0.75rem; }
+
+/* Statistics grid — like the Stocks app's two-column stat sheet. */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.25rem 1.5rem;
+  margin-top: 0.75rem;
+}
+
+.stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+.stat-label { color: var(--ink-soft); }
+.stat-value { font-weight: bold; }
+
+/* News list */
+.news-item {
+  display: block;
+  padding: 0.7rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  text-decoration: none;
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  transition: background 0.1s;
+}
+.news-item:hover { background: var(--paper-dim); }
+.news-item:last-child { border-bottom: none; }
+.news-title { display: block; font-size: 0.9rem; }
+.news-meta { display: block; color: var(--ink-soft); font-size: 0.75rem; margin-top: 0.15rem; }
+
+/* Deep dive */
+.dd-conviction { margin-bottom: 0.75rem; }
+.dd-overview { font-size: 1rem; margin-bottom: 0.75rem; }
+.dd-block { margin-top: 1rem; }
+.dd-block ul { margin: 0.35rem 0 0 1.25rem; }
+
+.score-row { margin-top: 1.25rem; }
+.score-row-head { display: flex; justify-content: space-between; margin-bottom: 0.3rem; }
+.score-row-label { font-weight: bold; font-size: 0.9rem; }
+.score-row-num { color: var(--ink-soft); font-size: 0.85rem; }
+.score-row-text { margin-top: 0.5rem; font-size: 0.9rem; }
+
+.evidence {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  margin: 0.4rem 0 0 0.75rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--line);
+}
+
+/* ── Footer ────────────────────────────────────────────────────────── */
+.site-footer {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  padding: 1rem 0 2rem;
+}
+
+/* ── Phone-sized screens ───────────────────────────────────────────── */
 @media (max-width: 600px) {
-  .col-name { display: none; }
+  .site-header { padding: 0.75rem 1rem; }
+  main { padding: 1rem; }
+  .panel { padding: 1.1rem; }
+  .col-name { display: none; }   /* hide long names so the table fits */
+  .ticker-price { font-size: 1.5rem; }
 }
