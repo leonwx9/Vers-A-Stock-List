@@ -67,16 +67,15 @@ function drawSeries() {
 
   if (chartType === "line") {
     series = chart.addLineSeries({
-      color: "#111111", lineWidth: 2,
+      color: "#0f9d6e", lineWidth: 2,
       priceLineVisible: false, lastValueVisible: true,
     });
     series.setData(bars.map((b) => ({ time: b.date, value: b.close })));
   } else {
-    // Greyscale candles: rising days are white with black outline,
-    // falling days are solid grey.
+    // Market-green candles for rising days, quiet grey for falling ones.
     series = chart.addCandlestickSeries({
-      upColor: "#ffffff", borderUpColor: "#111111", wickUpColor: "#111111",
-      downColor: "#8a8a8a", borderDownColor: "#8a8a8a", wickDownColor: "#8a8a8a",
+      upColor: "#0f9d6e", borderUpColor: "#0f9d6e", wickUpColor: "#0f9d6e",
+      downColor: "#9a9a9a", borderDownColor: "#9a9a9a", wickDownColor: "#9a9a9a",
     });
     series.setData(bars.map((b) => ({
       time: b.date, open: b.open, high: b.high, low: b.low, close: b.close,

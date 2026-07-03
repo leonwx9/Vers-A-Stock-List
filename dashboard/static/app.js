@@ -272,10 +272,10 @@ function drawPortfolioChart(history) {
       rightPriceScale: { borderVisible: false },
       timeScale: { borderVisible: false },
     });
-    // A soft grey area under a black line — still strictly greyscale.
+    // A market-green line with a soft green wash underneath.
     pfSeries = pfChart.addAreaSeries({
-      lineColor: "#111111", lineWidth: 2,
-      topColor: "rgba(0,0,0,0.10)", bottomColor: "rgba(0,0,0,0.0)",
+      lineColor: "#0f9d6e", lineWidth: 2,
+      topColor: "rgba(15,157,110,0.16)", bottomColor: "rgba(15,157,110,0.0)",
       priceLineVisible: false,
     });
     new ResizeObserver(() => pfChart.applyOptions({ width: box.clientWidth }))

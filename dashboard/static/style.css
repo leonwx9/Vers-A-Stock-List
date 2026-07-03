@@ -1,5 +1,6 @@
 /* style.css — the entire look of the dashboard.
-   Locked palette: black, white, and greys only. No accent colours.
+   Palette: black, white, greys — plus ONE accent: an emerald "market
+   green" used only where it carries meaning (gains, scores, actions).
 
    The layout follows a few principles borrowed from well-designed products
    (Apple, Linear, Stripe): hierarchy comes from size/weight and whitespace
@@ -13,6 +14,9 @@
   --line: #e6e6e6;        /* hairline borders */
   --paper: #ffffff;       /* card backgrounds */
   --paper-dim: #f7f7f7;   /* page background */
+  --accent: #0f9d6e;      /* market green: gains, scores, primary actions */
+  --accent-dark: #0b7a55; /* hover state of the green */
+  --accent-soft: #e7f6ef; /* faint green tint for backgrounds */
   --radius: 16px;         /* card corner rounding */
   --radius-sm: 10px;      /* buttons, small elements */
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
@@ -60,6 +64,17 @@ td, .stat-value, .ticker-price { font-variant-numeric: tabular-nums; }
   color: var(--ink);
   text-decoration: none;
   letter-spacing: 0.01em;
+}
+
+.wordmark::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 5px;
+  vertical-align: baseline;
 }
 
 .header-note, .tagline {
@@ -118,7 +133,7 @@ main {
 .action-btn {
   font: inherit;
   font-size: 0.9rem;
-  background: var(--ink);
+  background: var(--accent);
   color: var(--paper);
   border: none;
   border-radius: 999px;              /* pill shape */
@@ -126,7 +141,7 @@ main {
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
 }
-.action-btn:hover { background: #333333; }
+.action-btn:hover { background: var(--accent-dark); }
 .action-btn:active { transform: scale(0.97); }
 .action-btn:disabled { background: #9a9a9a; cursor: wait; }
 
@@ -188,7 +203,7 @@ main {
 .pick-meta { color: var(--ink-soft); font-size: 0.8rem; margin-top: 0.5rem; }
 
 .score-badge {
-  background: var(--ink);
+  background: var(--accent);
   color: var(--paper);
   border-radius: 999px;
   padding: 0.1rem 0.6rem;
@@ -207,7 +222,7 @@ main {
   max-width: 100%;
   background: var(--paper-dim);
 }
-.filter-input:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+.filter-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* ── The all-tickers table ─────────────────────────────────────────── */
 .table-wrap { overflow-x: auto; }
@@ -241,8 +256,8 @@ th:hover { color: var(--ink); }
 
 .row-chevron { color: var(--ink-soft); text-align: right; }
 
-/* Greyscale only: gains are solid black, losses are mid grey. */
-.up { color: var(--ink); }
+/* Gains are market green; losses stay quiet grey. */
+.up { color: var(--accent); font-weight: bold; }
 .down { color: var(--ink-soft); }
 
 .flag-tag {
@@ -262,7 +277,7 @@ th:hover { color: var(--ink); }
   height: 6px;
   overflow: hidden;
 }
-.score-bar-fill { background: var(--ink); height: 100%; border-radius: 999px; }
+.score-bar-fill { background: var(--accent); height: 100%; border-radius: 999px; }
 .cell-score { display: flex; align-items: center; gap: 0.5rem; min-width: 90px; }
 .cell-score .score-bar { flex: 1; }
 
@@ -355,7 +370,7 @@ th:hover { color: var(--ink); }
   font-size: 0.82rem;
   margin: 0.4rem 0 0 0.75rem;
   padding-left: 0.75rem;
-  border-left: 2px solid var(--line);
+  border-left: 2px solid var(--accent);
 }
 
 /* ── Footer ────────────────────────────────────────────────────────── */
@@ -432,7 +447,7 @@ html { scroll-behavior: smooth; }
   transition: background 0.15s, color 0.15s;
 }
 .side-link:hover { background: #ececec; color: var(--ink); }
-.side-link.active { background: var(--ink); color: var(--paper); }
+.side-link.active { background: var(--accent); color: var(--paper); }
 
 /* Small quiet button for collapsing tables. */
 .mini-btn {
