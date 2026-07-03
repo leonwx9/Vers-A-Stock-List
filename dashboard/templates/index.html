@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- This viewport line is what makes the page scale properly on a phone. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vers A — Dashboard</title>
+  <!-- url_for is Flask's safe way of linking to files in the static/ folder. -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+  <header class="site-header">
+    <h1>Vers A</h1>
+    <p class="tagline">Stock Searcher &amp; AI Pivot Scanner — analysis and paper trading only, never real trades.</p>
+  </header>
+
+  <main>
+    <!-- ── Section 1: the Stock Searcher ─────────────────────────────── -->
+    <section class="panel" id="stock-searcher">
+      <h2>Stock Searcher</h2>
+      <p class="panel-subtitle">85-ticker universe · bull vs bear · conviction scores · paper portfolio</p>
+      <div class="empty-state">
+        Nothing here yet — the analysis engine arrives in milestone&nbsp;3.
+      </div>
+    </section>
+
+    <!-- ── Section 2: the AI Pivot Scanner ───────────────────────────── -->
+    <section class="panel" id="pivot-scanner">
+      <h2>AI Pivot Scanner</h2>
+      <p class="panel-subtitle">Small-cap non-tech companies newly disclosing AI pivots · SEC EDGAR · skeptical analysis</p>
+      <div class="empty-state">
+        Nothing here yet — the scanner arrives in milestone&nbsp;5.
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    Local dashboard · sample data phase · no investment advice
+  </footer>
+
+</body>
+</html>
