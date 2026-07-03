@@ -10,6 +10,7 @@ portfolio:
   # from this list to allow it again. (Decision from CLAUDE.md's Phase 2 reminder.)
   excluded_flags: [leveraged, inverse, volatility]
   shortlist_size: 5           # how many top picks make the shortlist
+  stop_loss_pct: 10           # auto-sell a holding once it's down this % from entry
 
 analysis:
   batch_size: 10              # tickers sent to the AI per request (fewer = slower + pricier)
