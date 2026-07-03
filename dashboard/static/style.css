@@ -374,3 +374,22 @@ th:hover { color: var(--ink); }
   .col-name { display: none; }   /* hide long names so the table fits */
   .ticker-price { font-size: 1.5rem; }
 }
+
+/* ── Paper Portfolio panel (milestone 4) ───────────────────────────── */
+.btn-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+/* A quieter, outlined variant for destructive/secondary actions. */
+.ghost-btn {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.ghost-btn:hover { background: var(--paper-dim); }
+
+.value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 0.25rem 0 0.75rem;
+}

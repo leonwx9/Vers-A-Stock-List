@@ -28,8 +28,14 @@
     Charts via vendored TradingView Lightweight Charts™ (works offline).
   - Charts show sample prices until milestone 6 swaps in live data.
 
+- **M4 — Paper Portfolio**: $10,000 pretend money. "Sync to shortlist" makes
+  the portfolio mirror the latest shortlist (sells drops, sells >10%
+  stop-loss losers, buys new picks — whole shares, ≤$800 each, never
+  risk-flagged products). Total-value graph grows one point per day of use.
+  Holdings table with P/L; every trade logged; Reset button starts over.
+  Leon's feedback applied: Verdict column removed from the table.
+
 ## Next
-- M4: paper-trading portfolio + total-value graph (sample data).
 - M5: AI Pivot Scanner (SEC EDGAR + skeptical analysis).
 - M6: swap sample prices for live data (one ticker first).
 - M7/M8: polish, README, handover guide.

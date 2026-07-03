@@ -25,12 +25,14 @@ from dashboard.config_loader import load_universe
 from dashboard.datasources.news_source import GoogleNewsSource
 from dashboard.datasources.sample_source import SampleSource
 from dashboard.llm.provider import MissingKeyError, get_provider
+from dashboard.portfolio.engine import PaperPortfolio
 
 app = Flask(__name__)
 
 # One shared instance of each data source is plenty for a local app.
 prices = SampleSource()
 news = GoogleNewsSource()
+portfolio = PaperPortfolio(prices)
 
 
 def find_asset(symbol):
@@ -96,6 +98,31 @@ def api_run_analysis():
         return jsonify({"status": "error", "message": f"Analysis failed: {e}"}), 500
 
     return jsonify({"status": "ok", **result})
+
+
+@app.route("/api/portfolio")
+def api_portfolio():
+    """The paper portfolio: value, holdings, history for the graph."""
+    return jsonify({"status": "ok", **portfolio.summary()})
+
+
+@app.route("/api/portfolio/sync", methods=["POST"])
+def api_portfolio_sync():
+    """Make the paper portfolio mirror the latest shortlist."""
+    latest = searcher.load_latest()
+    if latest is None:
+        return jsonify({"status": "error",
+                        "message": "Run an analysis first — the portfolio "
+                                   "buys from the shortlist."}), 400
+    trades = portfolio.sync_to_shortlist(latest["shortlist"])
+    return jsonify({"status": "ok", "trades_made": trades, **portfolio.summary()})
+
+
+@app.route("/api/portfolio/reset", methods=["POST"])
+def api_portfolio_reset():
+    """Start the pretend portfolio over from fresh cash."""
+    portfolio.reset()
+    return jsonify({"status": "ok", **portfolio.summary()})
 
 
 @app.route("/api/ticker/<path:symbol>")

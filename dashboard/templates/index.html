@@ -36,7 +36,34 @@
       <div id="analysis-table" class="table-wrap"></div>
     </section>
 
-    <!-- ── Section 2: the AI Pivot Scanner ───────────────────────────── -->
+    <!-- ── Section 2: the paper-trading portfolio ────────────────────── -->
+    <section class="panel" id="portfolio">
+      <div class="panel-header">
+        <div>
+          <h2>Paper Portfolio</h2>
+          <p class="panel-subtitle">$10,000 pretend money · mirrors the shortlist · whole shares · stop-loss discipline</p>
+        </div>
+        <div class="btn-row">
+          <button id="sync-btn" class="action-btn">Sync to shortlist</button>
+          <button id="reset-btn" class="action-btn ghost-btn">Reset</button>
+        </div>
+      </div>
+      <p id="portfolio-status" class="status-line"></p>
+
+      <!-- Big total-value number + change since start -->
+      <div class="value-row">
+        <span class="ticker-price" id="pf-value">—</span>
+        <span class="ticker-change" id="pf-change"></span>
+      </div>
+
+      <!-- The total-value-over-time graph -->
+      <div id="pf-chart" class="chart-box"></div>
+
+      <!-- Current holdings -->
+      <div id="pf-holdings" class="table-wrap"></div>
+    </section>
+
+    <!-- ── Section 3: the AI Pivot Scanner ───────────────────────────── -->
     <section class="panel" id="pivot-scanner">
       <h2>AI Pivot Scanner</h2>
       <p class="panel-subtitle">Small-cap non-tech companies newly disclosing AI pivots · SEC EDGAR · skeptical analysis</p>
@@ -50,6 +77,8 @@
     Local dashboard · sample data phase · no investment advice
   </footer>
 
+  <!-- TradingView Lightweight Charts™ (Apache-2.0), served locally. -->
+  <script src="{{ url_for('static', filename='vendor/lightweight-charts.standalone.production.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
