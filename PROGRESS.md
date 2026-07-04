@@ -56,9 +56,15 @@
   work. Charts, stats, portfolio and analysis all live automatically —
   nothing else changed, which was the whole point of the interface design.
 
+- **Feedback round**: signal red (#d13c3c) for losses/falling candles; change
+  column now a dropdown (1D/1W/1M/3M/1Y/5Y/All — live source pulls each
+  stock's lifetime series, located by date); PWA layer (manifest + icons +
+  iOS meta) and host=0.0.0.0 so Leon's phone can reach the dashboard via
+  Tailscale or home Wi-Fi. Tailscale install steps handed to Leon.
+
 ## Next
-- Phone access: Tailscale + PWA (Leon has iPhone; Mac often asleep —
-  needs keep-awake setting; cloud hosting is a clean later migration).
+- Leon: install Tailscale (Mac + iPhone), Add to Home Screen, keep-awake
+  setting. Then: small cloud host with login (his request).
 - M7/M8: polish, README, handover guide.
 
 ## How to run
