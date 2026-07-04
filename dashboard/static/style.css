@@ -31,6 +31,8 @@
   padding: 0;
 }
 
+html, body { overflow-x: hidden; }   /* wide things scroll inside their own box */
+
 body {
   font-family: ui-rounded, "Arial Rounded MT Bold", "Arial Rounded MT",
                "Hiragino Maru Gothic ProN", Quicksand, Comfortaa,
@@ -53,6 +55,7 @@ td, .stat-value, .ticker-price { font-variant-numeric: tabular-nums; }
   align-items: baseline;
   gap: 1rem;
   padding: 0.9rem 1.5rem;
+  padding-top: calc(0.9rem + env(safe-area-inset-top)); /* clears the iPhone notch */
   background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(12px);        /* frosted-glass effect */
   -webkit-backdrop-filter: blur(12px);
@@ -464,15 +467,25 @@ html { scroll-behavior: smooth; }
 }
 .mini-btn:hover { background: var(--paper-dim); color: var(--ink); }
 
-/* On narrow screens the rail becomes a horizontal chip row up top. */
+/* On narrow screens the rail becomes a horizontal chip row that stays
+   pinned under the header while you scroll. */
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; padding: 1rem; }
+  .header-note { display: none; }   /* keeps "Vers A" on one line */
   .sidebar {
-    position: static;
+    position: sticky;
+    top: calc(3.1rem + env(safe-area-inset-top)); /* just below the header */
+    z-index: 9;
     flex-direction: row;
     overflow-x: auto;
     gap: 0.4rem;
-    padding-bottom: 0.25rem;
+    /* Full-bleed frosted strip, so content scrolling under it can't peek
+       through at the sides. Negative margins cancel .layout's padding. */
+    margin: 0 -1rem;
+    padding: 0.4rem 1rem 0.5rem;
+    background: rgba(247, 247, 247, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
   .side-link { white-space: nowrap; }
 }
