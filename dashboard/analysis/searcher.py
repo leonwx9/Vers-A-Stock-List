@@ -33,9 +33,7 @@ You respond ONLY with a JSON array — no prose before or after it."""
 BATCH_PROMPT = """\
 Analyze each security below for a short-term (weeks) paper-trading strategy.
 
-Important: the price figures are SIMULATED development data, not real market
-prices. Base your reasoning primarily on your general knowledge of each
-company/fund; treat the price trend only as illustrative momentum context.
+{price_note}
 
 For EACH security return one JSON object with exactly these keys:
   "ticker":     the symbol, unchanged
@@ -102,6 +100,17 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None):
     rules = rules or load_rules()
     batch_size = rules["analysis"]["batch_size"]
 
+    # Tell the AI honestly what kind of prices it's looking at.
+    data_source = rules.get("data", {}).get("price_source", "sample")
+    price_note = (
+        "The price figures are REAL recent market data (daily closes)."
+        if data_source == "live" else
+        "Important: the price figures are SIMULATED development data, not real "
+        "market prices. Base your reasoning primarily on your general knowledge "
+        "of each company/fund; treat the price trend only as illustrative "
+        "momentum context."
+    )
+
     # 1. Prices for everyone (fast — sample data is generated locally).
     quotes = {a["symbol"]: source.get_quote(a["symbol"]) for a in universe}
 
@@ -113,7 +122,8 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None):
 
     def analyze_batch(batch):
         tickers = {a["symbol"] for a in batch}
-        prompt = BATCH_PROMPT.format(securities=_format_batch(batch, quotes))
+        prompt = BATCH_PROMPT.format(price_note=price_note,
+                                     securities=_format_batch(batch, quotes))
         reply = provider.complete(SYSTEM_PROMPT, prompt)
         return parse_batch_response(reply, tickers)
 
@@ -146,7 +156,7 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None):
 
     result = {
         "run_at": datetime.now().isoformat(timespec="seconds"),
-        "data_source": "sample",  # flipped to "live" in milestone 6
+        "data_source": data_source,
         "shortlist": shortlist,
         "rows": rows,
     }
@@ -166,7 +176,7 @@ def _save(result, rows, shortlist):
     lines = [
         f"# Picks — {date.today().isoformat()}",
         "",
-        "Data source: SAMPLE (simulated prices — development phase).",
+        f"Data source: {result['data_source']}.",
         "",
     ]
     for symbol in shortlist:

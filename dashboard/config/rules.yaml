@@ -1,6 +1,12 @@
 # rules.yaml — the tunable rules the app reads. Changing behaviour later
 # (bigger portfolio, different filters) means editing here, not the code.
 
+# Where prices come from:
+#   live   — real daily prices from Yahoo Finance (free, no key)
+#   sample — the offline fake data used while building (and for tests)
+data:
+  price_source: live
+
 portfolio:
   starting_cash: 10000        # pretend money the paper portfolio starts with (USD)
   whole_shares_only: true     # CMC Invest sells whole shares only — mirror that

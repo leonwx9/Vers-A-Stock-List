@@ -48,8 +48,17 @@
   until live data lands in M6. SEC rate-limit (403) and 5xx flakiness
   handled with backoff + keep-alive session.
 
+- **M6 — LIVE PRICES**: `data.price_source: live` in rules.yaml switches the
+  whole app to real daily market data from Yahoo Finance's free key-less
+  chart API (mirror-host fallback, 5-min in-memory cache, BRK/B→BRK-B
+  symbol mapping). Proven on one ticker (AAPL $308.63 real vs $230 sample),
+  then 85/85 tickers in 3.5s. Flip back to `sample` any time for offline
+  work. Charts, stats, portfolio and analysis all live automatically —
+  nothing else changed, which was the whole point of the interface design.
+
 ## Next
-- M6: swap sample prices for live data (one ticker first).
+- Phone access: Tailscale + PWA (Leon has iPhone; Mac often asleep —
+  needs keep-awake setting; cloud hosting is a clean later migration).
 - M7/M8: polish, README, handover guide.
 
 ## How to run

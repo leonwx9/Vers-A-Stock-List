@@ -28,8 +28,8 @@ async function load() {
 
   document.getElementById("chart-note").textContent =
     pageData.data_source === "sample"
-      ? "Simulated development data — live prices arrive with milestone 6."
-      : "Live market data.";
+      ? "Simulated development data (sample mode)."
+      : "Live market data — Yahoo Finance daily bars, cached a few minutes.";
 }
 
 /* ── Price header ────────────────────────────────────────────────────── */

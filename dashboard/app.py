@@ -21,7 +21,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from flask import Flask, abort, jsonify, render_template
 
 from dashboard.analysis import deep_dive, searcher
-from dashboard.config_loader import load_universe
+from dashboard.config_loader import load_rules, load_universe
+from dashboard.datasources.live_source import LiveSource
 from dashboard.datasources.news_source import GoogleNewsSource
 from dashboard.datasources.sample_source import SampleSource
 from dashboard.llm.provider import MissingKeyError, get_provider
@@ -32,7 +33,9 @@ from dashboard.scanner.edgar import EdgarClient
 app = Flask(__name__)
 
 # One shared instance of each data source is plenty for a local app.
-prices = SampleSource()
+# rules.yaml decides whether prices are live (Yahoo Finance) or sample.
+PRICE_SOURCE_NAME = load_rules().get("data", {}).get("price_source", "sample")
+prices = LiveSource() if PRICE_SOURCE_NAME == "live" else SampleSource()
 news = GoogleNewsSource()
 portfolio = PaperPortfolio(prices)
 edgar = EdgarClient()
@@ -172,7 +175,7 @@ def api_ticker(symbol):
         "news": news.get_headlines(symbol, asset["name"]),
         "screen": latest_screen_for(symbol),
         "deep_dive": deep_dive.load_cached(symbol),
-        "data_source": "sample",  # flipped to "live" in milestone 6
+        "data_source": PRICE_SOURCE_NAME,
     })
 
 
