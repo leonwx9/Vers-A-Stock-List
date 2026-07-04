@@ -50,3 +50,10 @@ def test_stats_cover_the_apple_stocks_fields():
                   "week52_high", "week52_low", "volume", "avg_volume_30d"):
         assert field in stats
     assert stats["week52_high"] >= stats["week52_low"]
+
+
+def test_changes_cover_every_period_the_dropdown_offers():
+    changes = SampleSource().get_changes("AAPL")
+    for period in ("1D", "1W", "1M", "3M", "1Y", "5Y", "ALL"):
+        assert period in changes
+        assert isinstance(changes[period], float)

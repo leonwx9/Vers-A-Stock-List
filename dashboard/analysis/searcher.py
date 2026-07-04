@@ -111,8 +111,10 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None):
         "momentum context."
     )
 
-    # 1. Prices for everyone (fast — sample data is generated locally).
+    # 1. Prices for everyone, plus the change-% for each period the table's
+    #    dropdown offers (1D … All time).
     quotes = {a["symbol"]: source.get_quote(a["symbol"]) for a in universe}
+    changes = {a["symbol"]: source.get_changes(a["symbol"]) for a in universe}
 
     # 2. Split the universe into batches and ask the AI about each batch.
     #    A thread pool runs a few requests at once so 85 tickers don't take
@@ -139,7 +141,7 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None):
     rows = []
     for asset in universe:
         symbol = asset["symbol"]
-        row = {**asset, **quotes[symbol]}
+        row = {**asset, **quotes[symbol], "changes": changes[symbol]}
         # If the AI skipped a ticker (rare), record that honestly.
         row.update(analyses.get(symbol, {
             "bull": "(no analysis returned)", "bear": "(no analysis returned)",

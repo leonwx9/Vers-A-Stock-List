@@ -13,6 +13,7 @@ rest of the app can keep using the CMC-style symbol.
 """
 
 import time
+from datetime import date
 
 import requests
 
@@ -87,3 +88,58 @@ class LiveSource(PriceSource):
             self._cache[symbol] = (now, self._fetch(symbol))
         history = self._cache[symbol][1]
         return history[-days:]
+
+    def _monthly_history(self, symbol):
+        """The full lifetime of the stock in MONTHLY bars — small enough to
+        download for any company, and all 5Y/All-time changes need is one
+        price per month. Cached like the daily series."""
+        key = (symbol, "monthly")
+        now = time.time()
+        cached = self._cache.get(key)
+        if cached is None or now - cached[0] > CACHE_TTL_SECONDS:
+            last_error = None
+            for url in CHART_URLS:
+                try:
+                    response = requests.get(
+                        url.format(symbol=to_yahoo_symbol(symbol)),
+                        params={"range": "max", "interval": "1mo"},
+                        headers={"User-Agent": "Mozilla/5.0"},
+                        timeout=15,
+                    )
+                    response.raise_for_status()
+                    self._cache[key] = (now, parse_chart(response.json()))
+                    break
+                except Exception as e:
+                    last_error = e
+            else:
+                raise RuntimeError(
+                    f"Could not fetch monthly prices for {symbol}: {last_error}")
+        return self._cache[key][1]
+
+    def get_changes(self, symbol):
+        """Like the base version for the short periods, but 5Y and ALL use
+        the stock's real lifetime history.
+
+        The lifetime series is located BY DATE, not by counting bars —
+        Yahoo quietly coarsens very long ranges (monthly becomes quarterly),
+        so bar-counting would land in the wrong year.
+        """
+        changes = super().get_changes(symbol)
+        try:
+            lifetime = self._monthly_history(symbol)
+            latest = self.get_history(symbol, days=1)[-1]["close"]
+
+            def pct_since(target_date):
+                # First bar on/after the target date; oldest bar if the
+                # stock is younger than the period.
+                past = next((b for b in lifetime if b["date"] >= target_date),
+                            lifetime[0])["close"]
+                return round((latest - past) / past * 100, 2)
+
+            today = date.today()
+            changes["5Y"] = pct_since(today.replace(year=today.year - 5).isoformat())
+            changes["ALL"] = round(
+                (latest - lifetime[0]["close"]) / lifetime[0]["close"] * 100, 2)
+        except Exception:
+            pass  # keep the base approximations rather than fail the page
+        return changes

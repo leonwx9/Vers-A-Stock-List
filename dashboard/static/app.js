@@ -16,6 +16,18 @@ let filterText = "";
 let tableCollapsed = localStorage.getItem("collapse-tickers") === "1";
 let holdingsCollapsed = localStorage.getItem("collapse-holdings") === "1";
 
+// Which period the change column shows (1D … All time), remembered per browser.
+const CHANGE_RANGES = ["1D", "1W", "1M", "3M", "1Y", "5Y", "ALL"];
+let changeRange = localStorage.getItem("change-range") || "1M";
+
+/* The change-% of a row for the selected period. Old saved runs (before the
+   dropdown existed) only have the 30-day number — reuse it for 1M. */
+function rowChange(r) {
+  if (r.changes && r.changes[changeRange] !== undefined) return r.changes[changeRange];
+  if (changeRange === "1M") return r.change_30d_pct;
+  return null;
+}
+
 /* ── 1. Load whatever analysis already exists ─────────────────────────── */
 async function loadExisting() {
   const res = await fetch("/api/analysis");
@@ -116,6 +128,7 @@ function renderTable() {
 
   // Apply the search filter, then the current sort.
   const text = filterText.toLowerCase();
+  currentRows.forEach((r) => { r.change_sel = rowChange(r) ?? -Infinity; });
   const rows = currentRows
     .filter((r) =>
       r.symbol.toLowerCase().includes(text) || r.name.toLowerCase().includes(text))
@@ -131,13 +144,16 @@ function renderTable() {
   const body = rows
     .map((r) => {
       const flags = r.flags.map((f) => `<span class="flag-tag">${f}</span>`).join("");
-      const changeClass = r.change_30d_pct >= 0 ? "up" : "down";
+      const chg = rowChange(r);
+      const changeCell = chg === null
+        ? `<td class="hint">—</td>`
+        : `<td class="${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "+" : ""}${chg}%</td>`;
       return `
       <tr class="main-row" data-symbol="${r.symbol}">
         <td><strong>${r.symbol}</strong>${flags}</td>
         <td class="col-name">${r.name}</td>
         <td>$${r.price}</td>
-        <td class="${changeClass}">${r.change_30d_pct >= 0 ? "+" : ""}${r.change_30d_pct}%</td>
+        ${changeCell}
         <td>
           <div class="cell-score">
             <div class="score-bar"><div class="score-bar-fill" style="width:${r.conviction * 10}%"></div></div>
@@ -164,7 +180,12 @@ function renderTable() {
           <th data-sort="symbol">Ticker${arrow("symbol")}</th>
           <th data-sort="name" class="col-name">Name${arrow("name")}</th>
           <th data-sort="price">Price${arrow("price")}</th>
-          <th data-sort="change_30d_pct">30d${arrow("change_30d_pct")}</th>
+          <th data-sort="change_sel">
+            <select id="range-select" class="range-select" title="Change period">
+              ${CHANGE_RANGES.map((p) =>
+                `<option value="${p}" ${p === changeRange ? "selected" : ""}>${p === "ALL" ? "All" : p}</option>`).join("")}
+            </select>${arrow("change_sel")}
+          </th>
           <th data-sort="conviction">Score${arrow("conviction")}</th>
           <th></th>
         </tr>
@@ -196,6 +217,14 @@ function renderTable() {
     const el = document.getElementById("filter-input");
     el.focus();
     el.setSelectionRange(el.value.length, el.value.length);
+  });
+
+  const rangeSelect = document.getElementById("range-select");
+  rangeSelect.addEventListener("click", (e) => e.stopPropagation());
+  rangeSelect.addEventListener("change", () => {
+    changeRange = rangeSelect.value;
+    localStorage.setItem("change-range", changeRange);
+    renderTable();
   });
 
   wireTableToggle();

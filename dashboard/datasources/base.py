@@ -47,6 +47,30 @@ class PriceSource(ABC):
             "change_30d_pct": pct_change(30),
         }
 
+    # The change periods the UI offers, measured in trading days (markets
+    # trade ~21 days a month, ~250 a year). "ALL" means "since the earliest
+    # bar this source has".
+    CHANGE_PERIODS = {"1D": 1, "1W": 5, "1M": 21, "3M": 63, "1Y": 250, "5Y": 1250}
+
+    def get_changes(self, symbol):
+        """% price change over each standard period, e.g. {"1D": -0.4, ...}.
+
+        If a period reaches further back than the available history, the
+        earliest bar is used instead (better an honest approximation than
+        a blank). Subclasses with deeper archives can override (LiveSource
+        does, for 5Y and ALL).
+        """
+        history = self.get_history(symbol, days=1300)
+        latest = history[-1]["close"]
+
+        def pct_from(bars_back):
+            past = history[max(0, len(history) - 1 - bars_back)]["close"]
+            return round((latest - past) / past * 100, 2)
+
+        changes = {name: pct_from(n) for name, n in self.CHANGE_PERIODS.items()}
+        changes["ALL"] = pct_from(len(history))  # clamps to the first bar
+        return changes
+
     def get_stats(self, symbol):
         """Apple-Stocks-style statistics computed from the price history.
 
