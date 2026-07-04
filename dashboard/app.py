@@ -212,4 +212,7 @@ if __name__ == "__main__":
     # debug=True auto-reloads on code edits and shows helpful error pages —
     # fine because this server is local-only. Port 5001 avoids clashing with
     # macOS's own service on port 5000.
-    app.run(debug=True, port=5001)
+    # host="0.0.0.0" makes the dashboard reachable from Leon's OTHER devices
+    # (phone via Tailscale or home Wi-Fi) — not just this Mac. It is still
+    # private: nothing on the public internet can reach a home machine.
+    app.run(debug=True, host="0.0.0.0", port=5001)

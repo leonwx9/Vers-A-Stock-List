@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ asset.symbol }} — Vers A</title>
+  <!-- "Add to Home Screen" support: manifest + icons make this page
+       install as a full-screen app on a phone. -->
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Vers A">
+  <meta name="theme-color" content="#f7f7f7">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <!-- TradingView Lightweight Charts™ (Apache-2.0), served from our own
        static folder so the page works offline. -->
