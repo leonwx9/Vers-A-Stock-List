@@ -72,10 +72,10 @@ function drawSeries() {
     });
     series.setData(bars.map((b) => ({ time: b.date, value: b.close })));
   } else {
-    // Market-green candles for rising days, quiet grey for falling ones.
+    // Market-green candles for rising days, signal red for falling ones.
     series = chart.addCandlestickSeries({
       upColor: "#0f9d6e", borderUpColor: "#0f9d6e", wickUpColor: "#0f9d6e",
-      downColor: "#9a9a9a", borderDownColor: "#9a9a9a", wickDownColor: "#9a9a9a",
+      downColor: "#d13c3c", borderDownColor: "#d13c3c", wickDownColor: "#d13c3c",
     });
     series.setData(bars.map((b) => ({
       time: b.date, open: b.open, high: b.high, low: b.low, close: b.close,
