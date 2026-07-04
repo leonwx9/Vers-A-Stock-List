@@ -18,7 +18,16 @@ from pathlib import Path
 # list of places Python looks for packages.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from flask import Flask, abort, jsonify, render_template
+import hmac
+import os
+import secrets
+from datetime import timedelta
+
+from dotenv import load_dotenv
+from flask import (Flask, abort, jsonify, redirect, render_template, request,
+                   session, url_for)
+
+load_dotenv()  # read .env so the password/keys below are available
 
 from dashboard.analysis import deep_dive, searcher
 from dashboard.config_loader import load_rules, load_universe
@@ -31,6 +40,49 @@ from dashboard.scanner import pivot_scanner
 from dashboard.scanner.edgar import EdgarClient
 
 app = Flask(__name__)
+
+# ── Login wall (only active when a password is set) ─────────────────────
+# Locally and over Tailscale no password is needed — leave DASHBOARD_PASSWORD
+# out of .env and nothing changes. On a cloud host, set it and every page
+# demands the password once per browser (remembered ~30 days).
+app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
+app.permanent_session_lifetime = timedelta(days=30)
+
+
+@app.before_request
+def require_login():
+    password = os.getenv("DASHBOARD_PASSWORD", "").strip()
+    if not password:
+        return None  # no password configured → open (local mode)
+    if request.endpoint in ("login", "static"):
+        return None  # the login page itself and CSS/JS stay reachable
+    if session.get("authed"):
+        return None
+    if request.path.startswith("/api/"):
+        # fetch() calls get a clear JSON error instead of a redirect page.
+        return jsonify({"status": "error", "message": "Not logged in."}), 401
+    return redirect(url_for("login"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        password = os.getenv("DASHBOARD_PASSWORD", "").strip()
+        # compare_digest = constant-time comparison (defeats timing attacks).
+        if hmac.compare_digest(request.form.get("password", ""), password):
+            session.permanent = True
+            session["authed"] = True
+            return redirect(url_for("home"))
+        error = "Wrong password."
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
 
 # One shared instance of each data source is plenty for a local app.
 # rules.yaml decides whether prices are live (Yahoo Finance) or sample.

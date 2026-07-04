@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Vers A — Log in</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="site-header"><span class="wordmark">Vers A</span></header>
+  <main style="max-width: 380px; margin-top: 15vh;">
+    <section class="panel">
+      <h2>Log in</h2>
+      <p class="panel-subtitle">This dashboard is private.</p>
+      <form method="post">
+        <input class="filter-input" style="width:100%; margin-bottom:0.75rem"
+               type="password" name="password" placeholder="Password" autofocus>
+        <button class="action-btn" type="submit">Enter</button>
+        {% if error %}<p class="status-line" style="margin-top:0.5rem">⚠ {{ error }}</p>{% endif %}
+      </form>
+    </section>
+  </main>
+</body>
+</html>
