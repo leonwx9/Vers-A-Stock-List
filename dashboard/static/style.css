@@ -92,11 +92,16 @@ main {
   margin: 0 auto;
   padding: 1.5rem;
   display: grid;
+  /* minmax(0, …) = "never grow this column to fit an over-wide child" */
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.25rem;
 }
 
 /* ── Panels (the white cards) ──────────────────────────────────────── */
 .panel {
+  min-width: 0;          /* shrink rather than widen the page */
+  max-width: 100%;
+  overflow-x: clip;      /* anything wider is cut, not page-widening */
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -387,7 +392,9 @@ th:hover { color: var(--ink); }
 
 /* ── Phone-sized screens ───────────────────────────────────────────── */
 @media (max-width: 600px) {
+  .pick-grid { grid-template-columns: 1fr; }  /* one card per row on phones */
   .site-header { padding: 0.75rem 1rem; }
+  .site-header { padding-top: calc(0.75rem + env(safe-area-inset-top)); }
   main { padding: 1rem; }
   .panel { padding: 1.1rem; }
   .col-name { display: none; }   /* hide long names so the table fits */
@@ -470,7 +477,7 @@ html { scroll-behavior: smooth; }
 /* On narrow screens the rail becomes a horizontal chip row that stays
    pinned under the header while you scroll. */
 @media (max-width: 900px) {
-  .layout { grid-template-columns: 1fr; padding: 1rem; }
+  .layout { grid-template-columns: minmax(0, 1fr); padding: 1rem; }
   .header-note { display: none; }   /* keeps "Vers A" on one line */
   .sidebar {
     position: sticky;
