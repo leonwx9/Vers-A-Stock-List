@@ -62,9 +62,16 @@
   iOS meta) and host=0.0.0.0 so Leon's phone can reach the dashboard via
   Tailscale or home Wi-Fi. Tailscale install steps handed to Leon.
 
+- **Phone access working**: Tailscale + Add-to-Home-Screen confirmed on
+  Leon's iPhone. Portrait fixes: safe-area padding, sticky section chips,
+  hard width containment (page can no longer exceed the screen).
+- **Cloud prep done**: optional login wall (DASHBOARD_PASSWORD), HTTPS-only
+  cookies on Render, render.yaml blueprint, gunicorn; branch pushed to
+  GitHub. Awaiting Leon's Render signup (free tier: naps when idle, files
+  reset on restart — Mac copy stays the long-term record).
+
 ## Next
-- Leon: install Tailscale (Mac + iPhone), Add to Home Screen, keep-awake
-  setting. Then: small cloud host with login (his request).
+- Leon: create Render account, deploy the blueprint, set the secrets.
 - M7/M8: polish, README, handover guide.
 
 ## How to run
