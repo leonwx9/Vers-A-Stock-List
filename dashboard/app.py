@@ -47,6 +47,10 @@ app = Flask(__name__)
 # demands the password once per browser (remembered ~30 days).
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.permanent_session_lifetime = timedelta(days=30)
+# On Render (which sets the RENDER env var and serves over HTTPS), mark the
+# login cookie HTTPS-only so it can never leak over plain HTTP.
+app.config["SESSION_COOKIE_SECURE"] = bool(os.getenv("RENDER"))
+app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 
 @app.before_request

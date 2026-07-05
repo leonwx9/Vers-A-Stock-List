@@ -1,0 +1,32 @@
+# render.yaml — tells Render.com how to run this dashboard.
+# Render reads this file when you create a "Blueprint" from the repo.
+#
+# Free-tier notes:
+#   - the server naps after ~15 idle minutes (first visit wakes it, ~50s)
+#   - saved files (portfolio history, analysis runs) reset when the server
+#     restarts — the Mac copy remains the long-term record
+
+services:
+  - type: web
+    name: vers-a
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # gunicorn = the production-grade web server. Long timeout because an
+    # analysis run or EDGAR scan can take a few minutes.
+    startCommand: gunicorn dashboard.app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 600
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.6
+      - key: LLM_PROVIDER
+        value: openrouter
+      - key: OPENROUTER_MODEL
+        value: anthropic/claude-sonnet-5
+      - key: FLASK_SECRET_KEY
+        generateValue: true       # Render invents a random one — nothing to do
+      - key: DASHBOARD_PASSWORD
+        sync: false               # you type this in Render's dashboard (secret)
+      - key: OPENROUTER_API_KEY
+        sync: false               # you paste this in Render's dashboard (secret)
+      - key: SEC_EDGAR_CONTACT
+        sync: false               # optional: "YourName you@email.com"
