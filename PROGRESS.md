@@ -95,10 +95,26 @@
   setting explained), stale "sample data phase" footer fixed, hardcoded
   "85 tickers" wording made count-proof, comments audited. 45 tests pass.
 
+- **M8 — Handover guide** (HANDOVER.md) and **replication manual**
+  (REPLICATION.md, per CLAUDE.md reminder #4) written. Version A complete.
+
+- **Watchlists** (2026-07-06, Leon's request — data model approved before
+  building): the fixed universe is gone. New `dashboard/watchlists/` module
+  with a music-library model: a stock CATALOGUE (each stock once, with its
+  risk flags), WATCHLISTS (id + name + colour tag, unlimited), and
+  membership (a symbol can sit in many lists, analysed once). Free-range
+  search of any US-listed stock (Yahoo search endpoint, no key, no AI cost);
+  any symbol gets a full ticker page. AI analysis runs ONLY on watchlisted
+  stocks — costs scale with what's deliberately tracked. The old 98 tickers
+  migrated automatically into a default "CMC Invest — Single Share List"
+  watchlist, flags preserved; universe.yaml is now just that one-time seed.
+  Tag stored as {kind, color} so icons/emojis later are a new kind, not a
+  restructure. UI: Watchlists panel (search box with add-to-list dropdown,
+  colour-dot/rename/delete cards, remove-chips), tickable watchlist chips
+  on every ticker page, sidebar entry. 53 tests pass.
+
 ## Next
-- M8: plain-English handover guide (HANDOVER.md).
-- End of Version A: clarifying questions → replication manual (CLAUDE.md
-  reminder #4).
+- Leon: try the watchlists UI, adjust anything that feels off.
 
 ## How to run
 ```

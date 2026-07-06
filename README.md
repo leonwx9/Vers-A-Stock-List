@@ -1,13 +1,17 @@
 # Vers A — Stock Searcher & AI Pivot Scanner
 
-A private dashboard that does two things:
+A private dashboard that does three things:
 
-1. **Stock Searcher** — analyses a fixed universe of 98 US stocks/ETFs
-   (see `dashboard/config/universe.yaml`), runs a bull-vs-bear AI debate on
-   each, scores conviction 1–10, shortlists the top 5, and manages a
-   **$10,000 paper-trading portfolio** that mirrors the shortlist. Pretend
-   money only — this app never trades for real.
-2. **AI Pivot Scanner** — searches SEC EDGAR for small-cap, non-tech
+1. **Watchlists + free search** — search any US-listed stock (plain lookup,
+   no AI cost) and organise stocks into unlimited named, colour-tagged
+   watchlists. A stock can sit in many lists at once. The original
+   98-ticker CMC list lives on as the default watchlist.
+2. **Stock Searcher** — runs a bull-vs-bear AI debate on every *watchlisted*
+   stock (only what you deliberately track costs AI money), scores
+   conviction 1–10, shortlists the top 5, and manages a **$10,000
+   paper-trading portfolio** that mirrors the shortlist. Pretend money
+   only — this app never trades for real.
+3. **AI Pivot Scanner** — searches SEC EDGAR for small-cap, non-tech
    companies that have *just* disclosed an "AI pivot" in a filing, then reads
    the filing with deliberate skepticism: announced vs actually executed,
    can they fund it, red flags, hype score 1–10.
@@ -54,9 +58,12 @@ never reach GitHub.
 
 ## The config files (behaviour, no code edits needed)
 
-- `dashboard/config/universe.yaml` — the full ticker list. **Adding a stock =
-  adding one line here.** Risk flags (`leveraged` / `inverse` / `volatility`)
-  keep a product out of the shortlist and portfolio while still analysed.
+- `dashboard/config/universe.yaml` — the one-time migration seed: on first
+  run it becomes the default watchlist. After that, **add/remove stocks in
+  the dashboard itself** (search box + watchlists). Risk flags
+  (`leveraged` / `inverse` / `volatility`) live on each stock in the
+  catalogue and keep a product out of the shortlist and portfolio while
+  still analysed.
 - `dashboard/config/rules.yaml` — everything tunable:
   - `data.price_source`: `live` (Yahoo Finance) or `sample` (offline fake
     data for development — deterministic, no internet needed)
@@ -77,7 +84,7 @@ never reach GitHub.
 
 ## Tests
 
-45 automated tests, all offline (external services are faked):
+53 automated tests, all offline (external services are faked):
 
 ```bash
 ./venv/bin/python -m pytest tests/
@@ -88,9 +95,10 @@ never reach GitHub.
 ```
 dashboard/
   app.py               Flask server — routes and the login wall
-  config/              universe.yaml (tickers) + rules.yaml (behaviour)
+  config/              universe.yaml (migration seed) + rules.yaml (behaviour)
   config_loader.py     reads the two YAML files
-  datasources/         PriceSource interface; sample + live (Yahoo) + news
+  watchlists/          the watchlist store (catalogue + lists + membership)
+  datasources/         PriceSource interface; sample + live (Yahoo) + news + search
   llm/                 AI provider switch (OpenRouter ↔ Anthropic)
   analysis/            searcher (bull/bear/conviction) + per-ticker deep dive
   portfolio/           the $10,000 paper-trading engine

@@ -20,16 +20,21 @@ your portfolio history and picks live on the Mac (and in git).
 
 ## The routine
 
-1. **Run analysis** (Stock Searcher panel) — the AI debates all 98 tickers,
-   scores conviction, shortlists 5. Takes a minute or two. Each run also
-   writes a dated audit file into `picks/`.
-2. **Sync to shortlist** (Paper Portfolio panel) — the pretend $10,000
+1. **Curate your watchlists** (Watchlists panel) — search any US stock
+   (free, no AI cost) and add it to a list; make as many lists as you like.
+   Only watchlisted stocks get the paid AI treatment.
+2. **Run analysis** (Stock Searcher panel) — the AI debates every
+   watchlisted stock, scores conviction, shortlists 5. Takes a minute or
+   two. Each run also writes a dated audit file into `picks/`.
+3. **Sync to shortlist** (Paper Portfolio panel) — the pretend $10,000
    mirrors the new shortlist: sells drops, sells anything down more than
-   10% (stop-loss), buys the new picks. Every trade is logged.
-3. **Scan EDGAR** (AI Pivot Scanner panel) — whenever you're curious.
+   10% (stop-loss), buys the new picks. Every trade is logged. (Heads-up:
+   removing a stock from ALL watchlists drops it from the next analysis,
+   so the next sync sells it.)
+4. **Scan EDGAR** (AI Pivot Scanner panel) — whenever you're curious.
    Finding *nothing* is normal; genuine small-cap non-tech AI pivots are
    rare, which is rather the point.
-4. Click any ticker for its chart, statistics, news, and a "why this
+5. Click any ticker for its chart, statistics, news, and a "why this
    rating" deep dive (one AI request, then cached — press Refresh for a
    fresh one).
 
@@ -63,9 +68,11 @@ usually says what's wrong in nearly-plain English.
 
 ## Changing things yourself (no programming needed)
 
-- **Add/remove a stock**: one line in `dashboard/config/universe.yaml`.
-  Risky products get `flags: [leveraged]` (or `inverse` / `volatility`)
-  so the portfolio refuses to buy them.
+- **Add/remove a stock**: the search box and watchlist chips in the
+  dashboard — no files involved. Risky products carry flags (`leveraged` /
+  `inverse` / `volatility`) in the catalogue (`dashboard/data/`
+  `watchlists.json`) so the portfolio refuses to buy them; newly-added
+  stocks start unflagged.
 - **Trading rules**: `dashboard/config/rules.yaml` — starting cash, max $
   per position, stop-loss %, shortlist size, scanner market-cap ceiling…
   each line is commented.
