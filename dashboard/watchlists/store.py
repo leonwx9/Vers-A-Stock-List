@@ -28,10 +28,12 @@ STATE_PATH = Path(__file__).parent.parent / "data" / "watchlists.json"
 
 DEFAULT_LIST_NAME = "CMC Invest — Single Share List"
 
-# The colours offered for new watchlists (the UI cycles through these).
-# A tag is {"kind": "color", "value": ...} rather than a bare string so a
-# later upgrade to icons/emojis is a new "kind", not a restructure.
-TAG_PALETTE = ["#0f9d6e", "#3b82d6", "#d13c3c", "#c98a12", "#8b5cd6", "#6b6b6b"]
+# The colours a watchlist can wear (mirrored by the picker in app.js —
+# new lists rotate through them). A tag is {"kind": "color", "value": ...}
+# rather than a bare string so a later upgrade to icons/emojis is a new
+# "kind", not a restructure.
+TAG_PALETTE = ["#0f9d6e", "#3b82d6", "#d13c3c", "#c98a12", "#8b5cd6",
+               "#d6569c", "#12a5a5", "#8a8f3c", "#e0762e", "#6b6b6b"]
 
 
 def _new_id():

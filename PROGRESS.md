@@ -113,8 +113,18 @@
   colour-dot/rename/delete cards, remove-chips), tickable watchlist chips
   on every ticker page, sidebar entry. 53 tests pass.
 
+- **Watchlists UI round 2** (Leon's feedback): each watchlist is now a
+  proper table (ticker / name / price from the latest analysis / remove ×)
+  with a ▾/▸ collapse chevron remembered per list — not bubbles; the colour
+  dot opens a 10-swatch popup picker instead of cycling; every watchlist
+  has its own search box that adds stocks straight into that list (results
+  already in the list say so); and the Stock Searcher table gained a
+  watchlist filter dropdown next to the name filter.
+
 ## Next
-- Leon: try the watchlists UI, adjust anything that feels off.
+- Leon: decide whether cloud watchlists should survive Render restarts
+  (needs a paid instance + disk, or an external free database) — currently
+  the Mac copy is the permanent record.
 
 ## How to run
 ```

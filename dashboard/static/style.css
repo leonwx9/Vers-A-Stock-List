@@ -645,9 +645,24 @@ html { scroll-behavior: smooth; }
 .wl-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .wl-name { font-weight: bold; font-size: 0.95rem; }
 .wl-spacer { flex: 1; }
+.wl-body { margin-top: 0.6rem; }
 
-/* The colour tag: a clickable dot (cycles the palette). Built as a "tag"
-   so a future icon/emoji version swaps the dot, not the structure. */
+/* The ▾/▸ collapse chevron. */
+.wl-chev {
+  font: inherit;
+  font-size: 0.8rem;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+.wl-chev:hover { color: var(--ink); }
+
+/* The colour tag: a clickable dot that opens a swatch popup. Built as a
+   "tag" so a future icon/emoji version swaps the dot, not the structure. */
+.wl-dot-wrap { position: relative; display: inline-flex; }
+
 .wl-dot {
   width: 14px;
   height: 14px;
@@ -657,20 +672,36 @@ html { scroll-behavior: smooth; }
   flex-shrink: 0;
 }
 
-.wl-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
-
-.stock-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.15rem;
+.color-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -6px;
+  z-index: 25;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 8px;
+  background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0.1rem 0.3rem 0.1rem 0.6rem;
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: background 0.1s;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
 }
-.stock-chip:hover { background: var(--paper-dim); }
+
+.swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.swatch:hover { transform: scale(1.2); }
+
+/* Each list's own "add a stock" search box. */
+.wl-search { max-width: 420px; }
+
+/* The remove-× at the end of a watchlist row. */
+.row-x { text-align: right; width: 2rem; }
 
 .chip-x {
   font: inherit;
@@ -682,6 +713,11 @@ html { scroll-behavior: smooth; }
   border-radius: 50%;
 }
 .chip-x:hover { color: var(--red); }
+
+.add-row { cursor: pointer; }
+.add-row:hover { background: var(--paper-dim); }
+.add-row.muted { cursor: default; opacity: 0.55; }
+.add-row.muted:hover { background: transparent; }
 
 /* Ticker page: one tickable chip per watchlist. */
 #wl-membership { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.5rem 0.25rem 0; }

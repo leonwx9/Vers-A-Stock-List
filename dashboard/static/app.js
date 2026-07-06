@@ -10,6 +10,7 @@ const runButton = document.getElementById("run-analysis-btn");
 let currentRows = [];                       // the rows currently displayed
 let sortState = { key: "conviction", dir: -1 };  // default: best score first
 let filterText = "";
+let wlFilter = "all";                       // which watchlist the table shows
 
 // Collapse preferences survive page reloads via localStorage (a tiny
 // key-value store the browser keeps per site).
@@ -88,6 +89,7 @@ function render(data) {
   currentRows = data.rows;
   renderShortlist(data);
   renderTable();
+  renderWatchlists();  // fresh analysis prices → fill the Price columns
 }
 
 function renderShortlist(data) {
@@ -126,10 +128,13 @@ function renderTable() {
     return;
   }
 
-  // Apply the search filter, then the current sort.
+  // Apply the watchlist filter, then the search filter, then the sort.
+  const chosen = wlData.watchlists.find((w) => w.id === wlFilter);
+  const inChosen = chosen ? new Set(chosen.symbols) : null;
   const text = filterText.toLowerCase();
   currentRows.forEach((r) => { r.change_sel = rowChange(r) ?? -Infinity; });
   const rows = currentRows
+    .filter((r) => !inChosen || inChosen.has(r.symbol))
     .filter((r) =>
       r.symbol.toLowerCase().includes(text) || r.name.toLowerCase().includes(text))
     .sort((a, b) => {
@@ -167,8 +172,13 @@ function renderTable() {
 
   document.getElementById("analysis-table").innerHTML = `
     <div class="panel-header" style="margin-top:1rem">
-      <h3 class="subheading">All ${rows.length} tickers <span class="hint">(click a row to open its page)</span></h3>
+      <h3 class="subheading">${chosen ? chosen.name : "All"} — ${rows.length} tickers <span class="hint">(click a row to open its page)</span></h3>
       <div class="btn-row">
+        <select id="wl-table-filter" class="range-select" title="Show one watchlist only">
+          <option value="all">All watchlists</option>
+          ${wlData.watchlists.map((w) =>
+            `<option value="${w.id}" ${w.id === wlFilter ? "selected" : ""}>${w.name}</option>`).join("")}
+        </select>
         <input id="filter-input" class="filter-input" type="search"
                placeholder="Filter by ticker or name…" value="${filterText}">
         <button id="toggle-table" class="mini-btn">Hide</button>
@@ -224,6 +234,13 @@ function renderTable() {
   rangeSelect.addEventListener("change", () => {
     changeRange = rangeSelect.value;
     localStorage.setItem("change-range", changeRange);
+    renderTable();
+  });
+
+  // The watchlist dropdown narrows the table to one list.
+  const wlSelect = document.getElementById("wl-table-filter");
+  wlSelect.addEventListener("change", () => {
+    wlFilter = wlSelect.value;
     renderTable();
   });
 
@@ -396,13 +413,15 @@ loadPortfolio();
 /* The playlist model: stocks live once in a catalogue; each watchlist is a
    named, coloured list of symbols; the same stock can sit in many lists. */
 const wlStatus = document.getElementById("watchlists-status");
-const WL_PALETTE = ["#0f9d6e", "#3b82d6", "#d13c3c", "#c98a12", "#8b5cd6", "#6b6b6b"];
+const WL_PALETTE = ["#0f9d6e", "#3b82d6", "#d13c3c", "#c98a12", "#8b5cd6",
+                    "#d6569c", "#12a5a5", "#8a8f3c", "#e0762e", "#6b6b6b"];
 let wlData = { watchlists: [], stocks: {} };
 
 async function loadWatchlists() {
   const res = await fetch("/api/watchlists");
   wlData = await res.json();
   renderWatchlists();
+  if (currentRows.length) renderTable();  // (re)fill the watchlist filter
 }
 
 /* Any endpoint that changes watchlists answers with the fresh summary —
@@ -411,29 +430,69 @@ function updateWatchlists(data) {
   if (data.watchlists) {
     wlData = data;
     renderWatchlists();
+    if (currentRows.length) renderTable();
   }
 }
 
+/* The latest analysis knows each stock's price — reuse it in the watchlist
+   tables so they look like the main table (blank before the first run). */
+function priceCell(symbol) {
+  const row = currentRows.find((r) => r.symbol === symbol);
+  return row ? `$${row.price}` : "—";
+}
+
 function renderWatchlists() {
+  const swatches = WL_PALETTE.map((c) =>
+    `<button class="swatch" data-color="${c}" style="background:${c}"></button>`).join("");
+
   const cards = wlData.watchlists.map((wl) => {
-    const chips = wl.symbols.map((s) => `
-      <span class="stock-chip" data-symbol="${s}" title="${(wlData.stocks[s] || {}).name || s}">
-        ${s}<button class="chip-x" data-list="${wl.id}" data-symbol="${s}"
-                    title="Remove from ${wl.name}">×</button>
-      </span>`).join("");
+    const collapsed = localStorage.getItem(`wl-collapsed-${wl.id}`) === "1";
+    const rows = wl.symbols.map((s) => {
+      const info = wlData.stocks[s] || {};
+      const flags = (info.flags || [])
+        .map((f) => `<span class="flag-tag">${f}</span>`).join("");
+      return `
+        <tr class="main-row" data-symbol="${s}">
+          <td><strong>${s}</strong>${flags}</td>
+          <td class="col-name">${info.name || s}</td>
+          <td>${priceCell(s)}</td>
+          <td class="row-x"><button class="chip-x" data-list="${wl.id}"
+              data-symbol="${s}" title="Remove from ${wl.name}">×</button></td>
+        </tr>`;
+    }).join("");
+
     return `
       <div class="wl-card" data-id="${wl.id}">
         <div class="wl-head">
-          <button class="wl-dot" style="background:${wl.tag.value}"
-                  title="Change colour"></button>
+          <button class="wl-chev" title="${collapsed ? "Show" : "Hide"} this list">
+            ${collapsed ? "▸" : "▾"}</button>
+          <span class="wl-dot-wrap">
+            <button class="wl-dot" style="background:${wl.tag.value}"
+                    title="Change colour"></button>
+            <span class="color-pop" hidden>${swatches}</span>
+          </span>
           <span class="wl-name">${wl.name}</span>
           <span class="hint">(${wl.count})</span>
           <span class="wl-spacer"></span>
           <button class="mini-btn wl-rename">Rename</button>
           <button class="mini-btn wl-delete">Delete</button>
         </div>
-        <div class="wl-chips">${chips ||
-          `<span class="hint">Empty — use the search box above to add stocks.</span>`}</div>
+        <div class="wl-body" ${collapsed ? "hidden" : ""}>
+          <!-- Each list has its own search: results add straight into it. -->
+          <div class="search-box wl-search">
+            <input class="filter-input wl-search-input" type="search"
+                   placeholder="Add a stock to this list — ticker or name…">
+            <div class="search-results" hidden></div>
+          </div>
+          ${wl.symbols.length ? `
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Ticker</th><th class="col-name">Name</th>
+                <th>Price</th><th></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>` : `<p class="hint">Empty — search above to add stocks.</p>`}
+        </div>
       </div>`;
   }).join("");
 
@@ -441,9 +500,9 @@ function renderWatchlists() {
   box.innerHTML = cards ||
     `<div class="empty-state">No watchlists yet — press “New watchlist”.</div>`;
 
-  // Chips open the stock's page; their little × removes it from that list.
-  box.querySelectorAll(".stock-chip").forEach((chip) =>
-    chip.addEventListener("click", () => openTicker(chip.dataset.symbol)));
+  // Rows open the stock's page; the × removes it from that list.
+  box.querySelectorAll(".main-row").forEach((row) =>
+    row.addEventListener("click", () => openTicker(row.dataset.symbol)));
   box.querySelectorAll(".chip-x").forEach((x) =>
     x.addEventListener("click", async (e) => {
       e.stopPropagation();  // don't also open the ticker page
@@ -453,18 +512,34 @@ function renderWatchlists() {
       updateWatchlists(await res.json());
     }));
 
-  // Card controls: colour dot cycles the palette; rename/delete ask first.
   box.querySelectorAll(".wl-card").forEach((card) => {
     const id = card.dataset.id;
     const wl = wlData.watchlists.find((w) => w.id === id);
-    card.querySelector(".wl-dot").addEventListener("click", async () => {
-      const next = WL_PALETTE[(WL_PALETTE.indexOf(wl.tag.value) + 1) % WL_PALETTE.length];
-      const res = await fetch(`/api/watchlists/${id}`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tag: { kind: "color", value: next } }),
-      });
-      if ((await res.json()).status === "ok") loadWatchlists();
+
+    // ▾/▸ collapses the list (remembered per list, like the big tables).
+    card.querySelector(".wl-chev").addEventListener("click", () => {
+      const collapsed = localStorage.getItem(`wl-collapsed-${id}`) === "1";
+      localStorage.setItem(`wl-collapsed-${id}`, collapsed ? "0" : "1");
+      renderWatchlists();
     });
+
+    // The colour dot opens a little swatch popup.
+    const pop = card.querySelector(".color-pop");
+    card.querySelector(".wl-dot").addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.querySelectorAll(".color-pop").forEach((p) => { p.hidden = true; });
+      pop.hidden = false;
+    });
+    pop.querySelectorAll(".swatch").forEach((sw) =>
+      sw.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const res = await fetch(`/api/watchlists/${id}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tag: { kind: "color", value: sw.dataset.color } }),
+        });
+        if ((await res.json()).status === "ok") loadWatchlists();
+      }));
+
     card.querySelector(".wl-rename").addEventListener("click", async () => {
       const name = prompt("New name for this watchlist:", wl.name);
       if (!name) return;
@@ -480,6 +555,60 @@ function renderWatchlists() {
       await fetch(`/api/watchlists/${id}`, { method: "DELETE" });
       loadWatchlists();
     });
+
+    // This list's own search box: click a result → added right here.
+    wireListSearch(card, wl);
+  });
+}
+
+/* The per-watchlist search box: same free lookup, but one click adds the
+   stock straight into THAT list (no dropdown-picking needed). */
+function wireListSearch(card, wl) {
+  const input = card.querySelector(".wl-search-input");
+  const drop = card.querySelector(".wl-search .search-results");
+  let timer = null;
+
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (!q) { drop.hidden = true; return; }
+    timer = setTimeout(async () => {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (data.status !== "ok") {
+        drop.innerHTML = `<div class="search-row hint">⚠ ${data.message}</div>`;
+      } else if (!data.results.length) {
+        drop.innerHTML = `<div class="search-row hint">No US-listed matches.</div>`;
+      } else {
+        drop.innerHTML = data.results.map((r) => {
+          const already = wl.symbols.includes(r.symbol);
+          return `
+            <div class="search-row add-row ${already ? "muted" : ""}"
+                 data-symbol="${r.symbol}" data-name="${r.name}" data-type="${r.type}">
+              <span class="search-main"><strong>${r.symbol}</strong> ${r.name}
+                <span class="flag-tag">${r.exchange}</span></span>
+              <span class="hint">${already ? "already in list" : "+ add"}</span>
+            </div>`;
+        }).join("");
+        drop.querySelectorAll(".add-row:not(.muted)").forEach((row) =>
+          row.addEventListener("click", async () => {
+            const res = await fetch(`/api/watchlists/${wl.id}/stocks`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ symbol: row.dataset.symbol,
+                                     name: row.dataset.name,
+                                     type: row.dataset.type }),
+            });
+            const data = await res.json();
+            if (data.status === "ok") {
+              wlStatus.textContent = `Added ${row.dataset.symbol} to “${wl.name}”.`;
+              updateWatchlists(data);
+            } else {
+              wlStatus.textContent = "⚠ " + data.message;
+            }
+          }));
+      }
+      drop.hidden = false;
+    }, 300);
   });
 }
 
@@ -564,9 +693,14 @@ async function runSearch(q) {
     }));
 }
 
-/* Clicking anywhere outside the search box closes the results dropdown. */
+/* Clicking anywhere else closes open dropdowns and the colour popup. */
 document.addEventListener("click", (e) => {
-  if (!e.target.closest(".search-box")) searchResults.hidden = true;
+  if (!e.target.closest(".search-box")) {
+    document.querySelectorAll(".search-results").forEach((d) => { d.hidden = true; });
+  }
+  if (!e.target.closest(".wl-dot-wrap")) {
+    document.querySelectorAll(".color-pop").forEach((p) => { p.hidden = true; });
+  }
 });
 
 loadWatchlists();
