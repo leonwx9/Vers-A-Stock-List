@@ -7,6 +7,7 @@
   with the two sections.
 - **M3 — Stock Searcher (code complete, awaiting API key)**:
   - `dashboard/config/universe.yaml` — all 85 tickers with risk flags
+    (later expanded to 98 — see below)
   - `dashboard/config/rules.yaml` — portfolio + analysis + scanner rules
   - `dashboard/datasources/` — PriceSource interface + deterministic SampleSource
   - `dashboard/llm/` — provider switch (OpenRouter now / Anthropic later)
@@ -70,9 +71,34 @@
   GitHub. Awaiting Leon's Render signup (free tier: naps when idle, files
   reset on restart — Mac copy stays the long-term record).
 
+- **Cloud LIVE** (2026-07-03): Leon deployed the blueprint — the dashboard
+  runs at https://vers-a.onrender.com behind the password wall (verified:
+  pages redirect to /login, APIs return 401 until logged in). Pushes to the
+  `dashboard` branch auto-deploy.
+
+- **Universe expanded to 98** (2026-07-06, Leon's request): added SNDK, ASML,
+  DELL, BB, NOK, ROK, MRVL, LITE, COHR, IBM, XNDU (Xanadu Quantum), SPCX
+  (SpaceX) and SATL. MU and RKLB were already on the list, so 13 of the
+  requested 15 were new — 98 total, not 100. Expansion = editing
+  universe.yaml only, as designed. Bonus bug fix the newcomers exposed:
+  quotes/stats now clamp to a stock's earliest bar, so a weeks-old listing
+  like SPCX no longer crashes the quote code (regression test added).
+
+- **Dark mode** (2026-07-06, Leon's request): ☾/☀ button in the header of
+  every page. The choice is saved per browser (localStorage), applies before
+  the page paints (no white flash), restyles the charts live, and flips the
+  phone status-bar colour. Implementation: all colours were already CSS
+  variables, so dark mode is one extra block of variable overrides in
+  style.css plus a small theme.js.
+
+- **M7 — Polish**: README.md written (what it is, how to run it, every
+  setting explained), stale "sample data phase" footer fixed, hardcoded
+  "85 tickers" wording made count-proof, comments audited. 45 tests pass.
+
 ## Next
-- Leon: create Render account, deploy the blueprint, set the secrets.
-- M7/M8: polish, README, handover guide.
+- M8: plain-English handover guide (HANDOVER.md).
+- End of Version A: clarifying questions → replication manual (CLAUDE.md
+  reminder #4).
 
 ## How to run
 ```
