@@ -51,3 +51,22 @@ def test_get_history_slices_most_recent_days():
     source._fetch = lambda symbol: parse_chart(CANNED_CHART)
     assert len(source.get_history("TEST", 2)) == 2
     assert source.get_history("TEST", 2)[-1]["close"] == 103.5
+
+
+def test_quote_and_stats_survive_a_brand_new_listing():
+    # A stock that IPO'd days ago (SpaceX/SPCX, 2026) has fewer bars than
+    # the 30-day and 2-day lookbacks assume. Quotes and stats must clamp
+    # to the earliest bar instead of crashing.
+    one_bar = [{"date": "2026-07-01", "open": 100.0, "high": 105.0,
+                "low": 99.0, "close": 104.0, "volume": 1_000_000}]
+    source = LiveSource()
+    source._fetch = lambda symbol: one_bar
+
+    quote = source.get_quote("NEWCO")
+    assert quote["price"] == 104.0
+    assert quote["change_30d_pct"] == 0.0   # clamped to its only bar
+
+    stats = source.get_stats("NEWCO")
+    assert stats["prev_close"] == 104.0     # no yesterday → today's bar
+    assert stats["day_change_pct"] == 0.0
+    assert stats["avg_volume_30d"] == 1_000_000

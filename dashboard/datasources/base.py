@@ -36,8 +36,10 @@ class PriceSource(ABC):
         latest = history[-1]["close"]
 
         def pct_change(days_back):
-            # % move from `days_back` trading days ago to now.
-            past = history[-(days_back + 1)]["close"]
+            # % move from `days_back` trading days ago to now. A stock
+            # younger than the period (a recent IPO like SPCX) doesn't have
+            # that many bars — clamp to its earliest one instead of crashing.
+            past = history[max(0, len(history) - 1 - days_back)]["close"]
             return round((latest - past) / past * 100, 2)
 
         return {
@@ -79,7 +81,9 @@ class PriceSource(ABC):
         """
         history = self.get_history(symbol, days=365)
         today = history[-1]
-        yesterday = history[-2]
+        # A stock that listed yesterday has no "previous close" — fall back
+        # to its only bar (day change reads 0%) rather than crash.
+        yesterday = history[-2] if len(history) > 1 else history[-1]
         closes = [d["close"] for d in history]
         return {
             "open": today["open"],
@@ -92,7 +96,8 @@ class PriceSource(ABC):
             "week52_high": round(max(closes), 2),
             "week52_low": round(min(closes), 2),
             "avg_volume_30d": int(
-                sum(d["volume"] for d in history[-30:]) / 30
+                # Average over however many of the last 30 days exist.
+                sum(d["volume"] for d in history[-30:]) / len(history[-30:])
             ),
             "volume": today["volume"],
         }
