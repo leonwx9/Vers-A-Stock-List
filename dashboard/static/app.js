@@ -392,6 +392,185 @@ function wireHoldingsToggle(holdings) {
 
 loadPortfolio();
 
+/* ── Watchlists panel ─────────────────────────────────────────────────── */
+/* The playlist model: stocks live once in a catalogue; each watchlist is a
+   named, coloured list of symbols; the same stock can sit in many lists. */
+const wlStatus = document.getElementById("watchlists-status");
+const WL_PALETTE = ["#0f9d6e", "#3b82d6", "#d13c3c", "#c98a12", "#8b5cd6", "#6b6b6b"];
+let wlData = { watchlists: [], stocks: {} };
+
+async function loadWatchlists() {
+  const res = await fetch("/api/watchlists");
+  wlData = await res.json();
+  renderWatchlists();
+}
+
+/* Any endpoint that changes watchlists answers with the fresh summary —
+   store it and redraw. */
+function updateWatchlists(data) {
+  if (data.watchlists) {
+    wlData = data;
+    renderWatchlists();
+  }
+}
+
+function renderWatchlists() {
+  const cards = wlData.watchlists.map((wl) => {
+    const chips = wl.symbols.map((s) => `
+      <span class="stock-chip" data-symbol="${s}" title="${(wlData.stocks[s] || {}).name || s}">
+        ${s}<button class="chip-x" data-list="${wl.id}" data-symbol="${s}"
+                    title="Remove from ${wl.name}">×</button>
+      </span>`).join("");
+    return `
+      <div class="wl-card" data-id="${wl.id}">
+        <div class="wl-head">
+          <button class="wl-dot" style="background:${wl.tag.value}"
+                  title="Change colour"></button>
+          <span class="wl-name">${wl.name}</span>
+          <span class="hint">(${wl.count})</span>
+          <span class="wl-spacer"></span>
+          <button class="mini-btn wl-rename">Rename</button>
+          <button class="mini-btn wl-delete">Delete</button>
+        </div>
+        <div class="wl-chips">${chips ||
+          `<span class="hint">Empty — use the search box above to add stocks.</span>`}</div>
+      </div>`;
+  }).join("");
+
+  const box = document.getElementById("watchlist-cards");
+  box.innerHTML = cards ||
+    `<div class="empty-state">No watchlists yet — press “New watchlist”.</div>`;
+
+  // Chips open the stock's page; their little × removes it from that list.
+  box.querySelectorAll(".stock-chip").forEach((chip) =>
+    chip.addEventListener("click", () => openTicker(chip.dataset.symbol)));
+  box.querySelectorAll(".chip-x").forEach((x) =>
+    x.addEventListener("click", async (e) => {
+      e.stopPropagation();  // don't also open the ticker page
+      const res = await fetch(`/api/watchlists/${x.dataset.list}/stocks/` +
+                              encodeURIComponent(x.dataset.symbol),
+                              { method: "DELETE" });
+      updateWatchlists(await res.json());
+    }));
+
+  // Card controls: colour dot cycles the palette; rename/delete ask first.
+  box.querySelectorAll(".wl-card").forEach((card) => {
+    const id = card.dataset.id;
+    const wl = wlData.watchlists.find((w) => w.id === id);
+    card.querySelector(".wl-dot").addEventListener("click", async () => {
+      const next = WL_PALETTE[(WL_PALETTE.indexOf(wl.tag.value) + 1) % WL_PALETTE.length];
+      const res = await fetch(`/api/watchlists/${id}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tag: { kind: "color", value: next } }),
+      });
+      if ((await res.json()).status === "ok") loadWatchlists();
+    });
+    card.querySelector(".wl-rename").addEventListener("click", async () => {
+      const name = prompt("New name for this watchlist:", wl.name);
+      if (!name) return;
+      const res = await fetch(`/api/watchlists/${id}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if ((await res.json()).status === "ok") loadWatchlists();
+    });
+    card.querySelector(".wl-delete").addEventListener("click", async () => {
+      if (!confirm(`Delete the watchlist “${wl.name}”? The stocks stay in ` +
+                   `any other lists they're in.`)) return;
+      await fetch(`/api/watchlists/${id}`, { method: "DELETE" });
+      loadWatchlists();
+    });
+  });
+}
+
+document.getElementById("new-watchlist-btn").addEventListener("click", async () => {
+  const name = prompt("Name for the new watchlist:");
+  if (!name) return;
+  const res = await fetch("/api/watchlists", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  const data = await res.json();
+  if (data.status === "ok") loadWatchlists();
+  else wlStatus.textContent = "⚠ " + data.message;
+});
+
+/* ── Free-range search box ────────────────────────────────────────────── */
+/* Plain lookup (no AI): type, see US-listed matches, click one to open its
+   page, or add it straight into a watchlist. Debounced so we only search
+   after the user pauses typing. */
+const searchInput = document.getElementById("stock-search");
+const searchResults = document.getElementById("search-results");
+let searchTimer = null;
+
+searchInput.addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  const q = searchInput.value.trim();
+  if (!q) { searchResults.hidden = true; return; }
+  searchTimer = setTimeout(() => runSearch(q), 300);
+});
+
+async function runSearch(q) {
+  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+  const data = await res.json();
+  if (data.status !== "ok") {
+    searchResults.innerHTML = `<div class="search-row hint">⚠ ${data.message}</div>`;
+    searchResults.hidden = false;
+    return;
+  }
+  if (!data.results.length) {
+    searchResults.innerHTML =
+      `<div class="search-row hint">No US-listed matches for “${q}”.</div>`;
+    searchResults.hidden = false;
+    return;
+  }
+
+  const listOptions = wlData.watchlists
+    .map((wl) => `<option value="${wl.id}">${wl.name}</option>`).join("");
+  searchResults.innerHTML = data.results.map((r) => `
+    <div class="search-row" data-symbol="${r.symbol}" data-name="${r.name}"
+         data-type="${r.type}">
+      <span class="search-main">
+        <strong>${r.symbol}</strong> ${r.name}
+        <span class="flag-tag">${r.exchange}</span>
+      </span>
+      <select class="range-select add-select" title="Add to a watchlist">
+        <option value="">+ Add…</option>${listOptions}
+      </select>
+    </div>`).join("");
+  searchResults.hidden = false;
+
+  searchResults.querySelectorAll(".search-main").forEach((main) =>
+    main.addEventListener("click", () =>
+      openTicker(main.parentElement.dataset.symbol)));
+  searchResults.querySelectorAll(".add-select").forEach((sel) =>
+    sel.addEventListener("change", async () => {
+      if (!sel.value) return;
+      const row = sel.parentElement;
+      const res = await fetch(`/api/watchlists/${sel.value}/stocks`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: row.dataset.symbol,
+                               name: row.dataset.name, type: row.dataset.type }),
+      });
+      const data = await res.json();
+      if (data.status === "ok") {
+        const wl = wlData.watchlists.find((w) => w.id === sel.value) || {};
+        wlStatus.textContent = `Added ${row.dataset.symbol} to “${wl.name}”.`;
+        updateWatchlists(data);
+      } else {
+        wlStatus.textContent = "⚠ " + data.message;
+      }
+      sel.value = "";
+    }));
+}
+
+/* Clicking anywhere outside the search box closes the results dropdown. */
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".search-box")) searchResults.hidden = true;
+});
+
+loadWatchlists();
+
 /* ── Sidebar: highlight the section currently on screen ──────────────── */
 /* An IntersectionObserver tells us when each section crosses a band near
    the top of the viewport; the matching sidebar link turns black. */
@@ -409,7 +588,7 @@ const observer = new IntersectionObserver(
   },
   { rootMargin: "-20% 0px -70% 0px" }, // the "reading band" near the top
 );
-["stock-searcher", "portfolio", "pivot-scanner"].forEach((id) =>
+["watchlists", "stock-searcher", "portfolio", "pivot-scanner"].forEach((id) =>
   observer.observe(document.getElementById(id)));
 
 /* ── AI Pivot Scanner panel ───────────────────────────────────────────── */

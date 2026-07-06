@@ -31,18 +31,40 @@
 
   <!-- ── Sidebar: jump between sections without scrolling ────────────── -->
   <nav class="sidebar" id="sidebar">
+    <a class="side-link" href="#watchlists">Watchlists</a>
     <a class="side-link" href="#stock-searcher">Shortlist</a>
     <a class="side-link" href="#portfolio">Paper Portfolio</a>
     <a class="side-link" href="#pivot-scanner">AI Pivot Scanner</a>
   </nav>
 
   <main>
+    <!-- ── Section 0: watchlists + free-range search ─────────────────── -->
+    <section class="panel" id="watchlists">
+      <div class="panel-header">
+        <div>
+          <h2>Watchlists</h2>
+          <p class="panel-subtitle">Search any US stock · organise into lists · only watchlisted stocks get the AI treatment</p>
+        </div>
+        <button id="new-watchlist-btn" class="action-btn ghost-btn">New watchlist</button>
+      </div>
+
+      <!-- Free-range search: plain lookup, no AI, costs nothing. -->
+      <div class="search-box">
+        <input id="stock-search" class="filter-input" type="search"
+               placeholder="Search any US stock — ticker or company name…">
+        <div id="search-results" class="search-results" hidden></div>
+      </div>
+
+      <p id="watchlists-status" class="status-line"></p>
+      <div id="watchlist-cards"></div>
+    </section>
+
     <!-- ── Section 1: the Stock Searcher ─────────────────────────────── -->
     <section class="panel" id="stock-searcher">
       <div class="panel-header">
         <div>
           <h2>Stock Searcher</h2>
-          <p class="panel-subtitle">98-ticker universe · bull vs bear · conviction scores · paper portfolio</p>
+          <p class="panel-subtitle">watchlisted stocks · bull vs bear · conviction scores · paper portfolio</p>
         </div>
         <button id="run-analysis-btn" class="action-btn">Run analysis</button>
       </div>

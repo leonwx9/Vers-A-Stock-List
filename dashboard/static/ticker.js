@@ -25,6 +25,7 @@ async function load() {
   renderStats();
   renderNews();
   renderDeepDive(pageData.deep_dive);
+  renderMembership();
 
   document.getElementById("chart-note").textContent =
     pageData.data_source === "sample"
@@ -40,6 +41,41 @@ function renderPrice() {
   const pct = stats.day_change_pct;
   el.textContent = `${pct >= 0 ? "+" : ""}${pct}% today`;
   el.className = "ticker-change " + (pct >= 0 ? "up" : "down");
+}
+
+/* ── Watchlist membership ────────────────────────────────────────────── */
+/* A row of tickable chips — one per watchlist. Ticked = this stock is in
+   that list. Only watchlisted stocks get the daily AI analysis. */
+async function renderMembership() {
+  const res = await fetch("/api/watchlists");
+  const data = await res.json();
+  const inLists = new Set(pageData.in_watchlists || []);
+  const box = document.getElementById("wl-membership");
+
+  box.innerHTML = data.watchlists.map((wl) => `
+    <label class="wl-check ${inLists.has(wl.id) ? "on" : ""}">
+      <input type="checkbox" data-id="${wl.id}" ${inLists.has(wl.id) ? "checked" : ""}>
+      <span class="wl-dot-mini" style="background:${wl.tag.value}"></span>${wl.name}
+    </label>`).join("");
+
+  box.querySelectorAll("input").forEach((cb) =>
+    cb.addEventListener("change", async () => {
+      const id = cb.dataset.id;
+      if (cb.checked) {
+        await fetch(`/api/watchlists/${id}/stocks`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbol: SYMBOL, name: pageData.asset.name,
+                                 type: pageData.asset.type }),
+        });
+        inLists.add(id);
+      } else {
+        await fetch(`/api/watchlists/${id}/stocks/` + encodeURIComponent(SYMBOL),
+                    { method: "DELETE" });
+        inLists.delete(id);
+      }
+      pageData.in_watchlists = [...inLists];
+      renderMembership();  // redraw so the chip's on/off style updates
+    }));
 }
 
 /* ── Chart ───────────────────────────────────────────────────────────── */
