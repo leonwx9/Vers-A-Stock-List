@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Vers A — Log in</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
 </head>
 <body>
-  <header class="site-header"><span class="wordmark">Vers A</span></header>
+  <header class="site-header"><span class="wordmark">Vers A</span>
+    <button id="theme-btn" class="theme-btn" title="Switch to dark mode">☾</button>
+  </header>
   <main style="max-width: 380px; margin-top: 15vh;">
     <section class="panel">
       <h2>Log in</h2>

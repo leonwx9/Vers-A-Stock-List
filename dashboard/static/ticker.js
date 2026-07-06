@@ -45,20 +45,33 @@ function renderPrice() {
 /* ── Chart ───────────────────────────────────────────────────────────── */
 function buildChart() {
   const box = document.getElementById("chart");
+  // chartThemeColors() (from theme.js) returns the current light/dark
+  // greys, because the chart canvas can't read CSS variables itself.
+  const theme = chartThemeColors();
   chart = LightweightCharts.createChart(box, {
     height: 340,
-    layout: { background: { color: "transparent" }, textColor: "#555555",
+    layout: { background: { color: "transparent" }, textColor: theme.text,
               fontFamily: getComputedStyle(document.body).fontFamily },
     grid: { vertLines: { visible: false },
-            horzLines: { color: "#ececec" } },
+            horzLines: { color: theme.grid } },
     rightPriceScale: { borderVisible: false },
     timeScale: { borderVisible: false },
-    crosshair: { horzLine: { labelBackgroundColor: "#111111" },
-                 vertLine: { labelBackgroundColor: "#111111" } },
+    crosshair: { horzLine: { labelBackgroundColor: theme.crosshairLabel },
+                 vertLine: { labelBackgroundColor: theme.crosshairLabel } },
   });
   // Keep the chart the right width when the window resizes.
   new ResizeObserver(() => chart.applyOptions({ width: box.clientWidth }))
     .observe(box);
+  // When the ☾/☀ button is pressed, re-read the colours and restyle.
+  window.addEventListener("themechange", () => {
+    const t = chartThemeColors();
+    chart.applyOptions({
+      layout: { textColor: t.text },
+      grid: { horzLines: { color: t.grid } },
+      crosshair: { horzLine: { labelBackgroundColor: t.crosshairLabel },
+                   vertLine: { labelBackgroundColor: t.crosshairLabel } },
+    });
+  });
 }
 
 function drawSeries() {

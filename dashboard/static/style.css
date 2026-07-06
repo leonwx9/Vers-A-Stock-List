@@ -21,6 +21,48 @@
   --radius: 16px;         /* card corner rounding */
   --radius-sm: 10px;      /* buttons, small elements */
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
+  /* Greys that used to be hardcoded — now tokens so dark mode can swap them. */
+  --control-bg: #efefef;    /* segmented-control track */
+  --hover-bg: #ececec;      /* hover fill on quiet elements */
+  --bar-bg: #ececec;        /* empty part of score bars */
+  --skeleton-a: #eeeeee;    /* loading-shimmer colours */
+  --skeleton-b: #f6f6f6;
+  --btn-disabled: #9a9a9a;
+  --header-glass: rgba(255, 255, 255, 0.82);  /* frosted header */
+  --sidebar-glass: rgba(247, 247, 247, 0.9);  /* frosted mobile chip row */
+  --chart-grid: #ececec;    /* chart gridlines (read by JS) */
+  --chart-text: #555555;    /* chart axis labels (read by JS) */
+  --crosshair-label: #111111;
+  color-scheme: light;      /* tells the browser to style scrollbars etc. */
+}
+
+/* Dark mode. theme.js puts data-theme="dark" on <html> when the moon
+   button is pressed (remembered in localStorage). Every colour below
+   overrides its light twin above — the rest of the stylesheet never
+   needs to know which mode is active. */
+html[data-theme="dark"] {
+  --ink: #f0f0f0;
+  --ink-soft: #9a9a9a;
+  --line: #2c2c2e;
+  --paper: #1c1c1e;         /* cards: iOS-dark grey, not pure black */
+  --paper-dim: #101012;     /* page background */
+  --accent: #16b47f;        /* slightly brighter green — reads better on dark */
+  --accent-dark: #0f9d6e;
+  --accent-soft: rgba(15, 157, 110, 0.16);
+  --red: #e35d5d;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.35);
+  --control-bg: #2a2a2c;
+  --hover-bg: #2a2a2c;
+  --bar-bg: #323234;
+  --skeleton-a: #232325;
+  --skeleton-b: #2c2c2e;
+  --btn-disabled: #4a4a4c;
+  --header-glass: rgba(18, 18, 20, 0.82);
+  --sidebar-glass: rgba(16, 16, 18, 0.9);
+  --chart-grid: #2a2a2c;
+  --chart-text: #9a9a9a;
+  --crosshair-label: #f0f0f0;
+  color-scheme: dark;
 }
 
 /* Rounded sans-serif everywhere. The browser picks the first installed one:
@@ -56,7 +98,7 @@ td, .stat-value, .ticker-price { font-variant-numeric: tabular-nums; }
   gap: 1rem;
   padding: 0.9rem 1.5rem;
   padding-top: calc(0.9rem + env(safe-area-inset-top)); /* clears the iPhone notch */
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--header-glass);
   backdrop-filter: blur(12px);        /* frosted-glass effect */
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
@@ -85,6 +127,25 @@ td, .stat-value, .ticker-price { font-variant-numeric: tabular-nums; }
   color: var(--ink-soft);
   font-size: 0.8rem;
 }
+
+/* The ☾/☀ dark-mode button, pushed to the right edge of the header. */
+.theme-btn {
+  margin-left: auto;
+  align-self: center;    /* the header aligns by text baseline; a round
+                            button looks better vertically centred */
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.theme-btn:hover { background: var(--hover-bg); }
 
 /* ── Page column ───────────────────────────────────────────────────── */
 main {
@@ -152,7 +213,7 @@ main {
 }
 .action-btn:hover { background: var(--accent-dark); }
 .action-btn:active { transform: scale(0.97); }
-.action-btn:disabled { background: #9a9a9a; cursor: wait; }
+.action-btn:disabled { background: var(--btn-disabled); cursor: wait; }
 
 .status-line {
   color: var(--ink-soft);
@@ -164,7 +225,7 @@ main {
 /* ── Segmented controls (chart range / line-candles toggle) ────────── */
 .seg-group {
   display: inline-flex;
-  background: #efefef;
+  background: var(--control-bg);
   border-radius: 999px;
   padding: 3px;
   gap: 2px;
@@ -281,7 +342,7 @@ th:hover { color: var(--ink); }
 
 /* Small score bar used in table rows and deep-dive sections. */
 .score-bar {
-  background: #ececec;
+  background: var(--bar-bg);
   border-radius: 999px;
   height: 6px;
   overflow: hidden;
@@ -293,7 +354,7 @@ th:hover { color: var(--ink); }
 /* ── Skeleton shimmer while loading ────────────────────────────────── */
 .skeleton {
   border-radius: var(--radius-sm);
-  background: linear-gradient(90deg, #eeeeee 25%, #f6f6f6 50%, #eeeeee 75%);
+  background: linear-gradient(90deg, var(--skeleton-a) 25%, var(--skeleton-b) 50%, var(--skeleton-a) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
 }
@@ -457,7 +518,7 @@ html { scroll-behavior: smooth; }
   border-radius: 999px;
   transition: background 0.15s, color 0.15s;
 }
-.side-link:hover { background: #ececec; color: var(--ink); }
+.side-link:hover { background: var(--hover-bg); color: var(--ink); }
 .side-link.active { background: var(--accent); color: var(--paper); }
 
 /* Small quiet button for collapsing tables. */
@@ -490,7 +551,7 @@ html { scroll-behavior: smooth; }
        through at the sides. Negative margins cancel .layout's padding. */
     margin: 0 -1rem;
     padding: 0.4rem 1rem 0.5rem;
-    background: rgba(247, 247, 247, 0.9);
+    background: var(--sidebar-glass);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
