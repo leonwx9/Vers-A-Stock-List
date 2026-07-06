@@ -523,12 +523,14 @@ function renderWatchlists() {
       renderWatchlists();
     });
 
-    // The colour dot opens a little swatch popup.
+    // The colour dot toggles a little swatch popup: click to open,
+    // click the same dot again (or anywhere else) to close.
     const pop = card.querySelector(".color-pop");
     card.querySelector(".wl-dot").addEventListener("click", (e) => {
       e.stopPropagation();
+      const wasOpen = !pop.hidden;
       document.querySelectorAll(".color-pop").forEach((p) => { p.hidden = true; });
-      pop.hidden = false;
+      pop.hidden = wasOpen;
     });
     pop.querySelectorAll(".swatch").forEach((sw) =>
       sw.addEventListener("click", async (e) => {

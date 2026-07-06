@@ -672,6 +672,10 @@ html { scroll-behavior: smooth; }
   flex-shrink: 0;
 }
 
+/* display:grid below would override the hidden attribute's display:none —
+   this line keeps hidden actually meaning hidden. */
+.color-pop[hidden] { display: none; }
+
 .color-pop {
   position: absolute;
   top: calc(100% + 6px);
