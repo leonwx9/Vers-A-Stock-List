@@ -38,6 +38,9 @@ BASE_PRICES = {
     "RKLB": 25, "TSLL": 12, "ASTS": 30, "HIMS": 20, "SMH": 250,
     "ELF": 120, "UNH": 520, "AVGO": 180, "APP": 350, "TTWO": 160,
     "CL": 95, "OXY": 55, "TMC": 4, "VRT": 110, "WMT": 90,
+    "SNDK": 60, "ASML": 750, "DELL": 120, "BB": 4, "NOK": 5,
+    "ROK": 280, "MRVL": 75, "LITE": 90, "COHR": 80, "IBM": 220,
+    "XNDU": 15, "SPCX": 200, "SATL": 4,
 }
 
 # How many days of fake history we always generate internally. Requests for

@@ -3,9 +3,10 @@
 from dashboard.config_loader import load_rules, load_universe
 
 
-def test_universe_has_all_85_tickers():
+def test_universe_has_all_98_tickers():
+    # 85 from STOCK_LIST.md + Leon's 13-ticker expansion (2026-07-06).
     assets = load_universe()
-    assert len(assets) == 85
+    assert len(assets) == 98
 
 
 def test_universe_symbols_are_unique():

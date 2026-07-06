@@ -146,7 +146,8 @@ def api_analysis():
 
 @app.route("/api/run-analysis", methods=["POST"])
 def api_run_analysis():
-    """Run a fresh analysis of all 85 tickers. Takes a minute or two —
+    """Run a fresh analysis of every ticker in the universe. Takes a minute
+    or two —
     the browser shows a 'running' state while it waits."""
     try:
         provider = get_provider()

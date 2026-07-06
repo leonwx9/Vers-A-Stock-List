@@ -99,3 +99,17 @@ assets:
   - { symbol: TMC,   name: TMC the Metals Co Inc,                 type: stock }
   - { symbol: VRT,   name: Vertiv Holdings Co (Class A),          type: stock }
   - { symbol: WMT,   name: Walmart Inc,                           type: stock }
+  # ── Added 2026-07-06 (Leon's expansion; MU and RKLB were already listed) ──
+  - { symbol: SNDK,  name: Sandisk Corp,                          type: stock }
+  - { symbol: ASML,  name: ASML Holding NV,                       type: stock }
+  - { symbol: DELL,  name: Dell Technologies Inc,                 type: stock }
+  - { symbol: BB,    name: BlackBerry Ltd,                        type: stock }
+  - { symbol: NOK,   name: Nokia Oyj,                             type: stock }
+  - { symbol: ROK,   name: Rockwell Automation Inc,               type: stock }
+  - { symbol: MRVL,  name: Marvell Technology Inc,                type: stock }
+  - { symbol: LITE,  name: Lumentum Holdings Inc,                 type: stock }
+  - { symbol: COHR,  name: Coherent Corp,                         type: stock }
+  - { symbol: IBM,   name: International Business Machines,       type: stock }
+  - { symbol: XNDU,  name: Xanadu Quantum Technologies,           type: stock }
+  - { symbol: SPCX,  name: Space Exploration Technologies (SpaceX), type: stock }
+  - { symbol: SATL,  name: Satellogic Inc,                        type: stock }

@@ -117,7 +117,7 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None):
     changes = {a["symbol"]: source.get_changes(a["symbol"]) for a in universe}
 
     # 2. Split the universe into batches and ask the AI about each batch.
-    #    A thread pool runs a few requests at once so 85 tickers don't take
+    #    A thread pool runs a few requests at once so ~100 tickers don't take
     #    forever; max_workers in rules.yaml keeps it polite.
     batches = [universe[i : i + batch_size] for i in range(0, len(universe), batch_size)]
     done_count = 0

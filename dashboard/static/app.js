@@ -42,7 +42,7 @@ async function loadExisting() {
 /* ── 2. Run a fresh analysis when the button is pressed ───────────────── */
 runButton.addEventListener("click", async () => {
   runButton.disabled = true;
-  statusLine.textContent = "Running analysis of all 85 tickers — this takes a minute or two…";
+  statusLine.textContent = "Running analysis of the full universe — this takes a minute or two…";
   showSkeletons();
   try {
     const res = await fetch("/api/run-analysis", { method: "POST" });
@@ -293,13 +293,24 @@ function renderPortfolio(data) {
 function drawPortfolioChart(history) {
   const box = document.getElementById("pf-chart");
   if (!pfChart) {
+    // chartThemeColors() (from theme.js) returns the current light/dark
+    // greys, because the chart canvas can't read CSS variables itself.
+    const theme = chartThemeColors();
     pfChart = LightweightCharts.createChart(box, {
       height: 220,
-      layout: { background: { color: "transparent" }, textColor: "#555555",
+      layout: { background: { color: "transparent" }, textColor: theme.text,
                 fontFamily: getComputedStyle(document.body).fontFamily },
-      grid: { vertLines: { visible: false }, horzLines: { color: "#ececec" } },
+      grid: { vertLines: { visible: false }, horzLines: { color: theme.grid } },
       rightPriceScale: { borderVisible: false },
       timeScale: { borderVisible: false },
+    });
+    // When the ☾/☀ button is pressed, re-read the colours and restyle.
+    window.addEventListener("themechange", () => {
+      const t = chartThemeColors();
+      pfChart.applyOptions({
+        layout: { textColor: t.text },
+        grid: { horzLines: { color: t.grid } },
+      });
     });
     // A market-green line with a soft green wash underneath.
     pfSeries = pfChart.addAreaSeries({

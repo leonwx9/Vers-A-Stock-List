@@ -15,12 +15,16 @@
   <meta name="apple-mobile-web-app-title" content="Vers A">
   <meta name="theme-color" content="#f7f7f7">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <!-- Loaded before the body so a saved dark-mode choice applies instantly
+       (no white flash). Also provides the ☾/☀ toggle logic. -->
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
 </head>
 <body>
 
   <header class="site-header">
     <a class="wordmark" href="/">Vers A</a>
     <span class="header-note">Stock Searcher &amp; AI Pivot Scanner · paper trading only · no investment advice</span>
+    <button id="theme-btn" class="theme-btn" title="Switch to dark mode">☾</button>
   </header>
 
   <div class="layout">
@@ -38,7 +42,7 @@
       <div class="panel-header">
         <div>
           <h2>Stock Searcher</h2>
-          <p class="panel-subtitle">85-ticker universe · bull vs bear · conviction scores · paper portfolio</p>
+          <p class="panel-subtitle">98-ticker universe · bull vs bear · conviction scores · paper portfolio</p>
         </div>
         <button id="run-analysis-btn" class="action-btn">Run analysis</button>
       </div>
@@ -49,7 +53,7 @@
       <!-- Top picks appear here as cards. -->
       <div id="shortlist"></div>
 
-      <!-- All 85 tickers appear here as a table (click a row to open its page). -->
+      <!-- Every ticker in universe.yaml appears here as a table (click a row to open its page). -->
       <div id="analysis-table" class="table-wrap"></div>
     </section>
 
@@ -97,7 +101,7 @@
   </div><!-- /.layout -->
 
   <footer class="site-footer">
-    Local dashboard · sample data phase · no investment advice
+    Live market data · paper trading only · charts by TradingView Lightweight Charts™ · no investment advice
   </footer>
 
   <!-- TradingView Lightweight Charts™ (Apache-2.0), served locally. -->
