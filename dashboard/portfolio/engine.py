@@ -26,10 +26,15 @@ STATE_PATH = Path(__file__).parent.parent / "data" / "portfolio.json"
 
 
 class PaperPortfolio:
-    def __init__(self, source, rules=None, state_path=None):
+    def __init__(self, source, rules=None, state_path=None, flags_source=None):
         self.source = source                       # any PriceSource
         self.rules = (rules or load_rules())["portfolio"]
         self.state_path = Path(state_path or STATE_PATH)
+        # Where to ask "which risk flags does this symbol carry?" — the app
+        # passes the watchlist catalogue; the default (the old fixed
+        # universe file) keeps existing tests working unchanged.
+        self.flags_source = flags_source or (
+            lambda: {a["symbol"]: set(a["flags"]) for a in load_universe()})
         self.state = self._load()
 
     # ── State on disk ───────────────────────────────────────────────────
@@ -110,7 +115,7 @@ class PaperPortfolio:
         Returns the list of trades made this sync."""
         trades_before = len(self.state["trades"])
         excluded = set(self.rules["excluded_flags"])
-        flags_by_symbol = {a["symbol"]: set(a["flags"]) for a in load_universe()}
+        flags_by_symbol = self.flags_source()
         stop_loss = self.rules["stop_loss_pct"] / 100
 
         # 1 + 2: go through holdings and decide what to sell.

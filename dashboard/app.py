@@ -30,14 +30,16 @@ from flask import (Flask, abort, jsonify, redirect, render_template, request,
 load_dotenv()  # read .env so the password/keys below are available
 
 from dashboard.analysis import deep_dive, searcher
-from dashboard.config_loader import load_rules, load_universe
+from dashboard.config_loader import load_rules
 from dashboard.datasources.live_source import LiveSource
 from dashboard.datasources.news_source import GoogleNewsSource
 from dashboard.datasources.sample_source import SampleSource
+from dashboard.datasources.stock_search import search_stocks
 from dashboard.llm.provider import MissingKeyError, get_provider
 from dashboard.portfolio.engine import PaperPortfolio
 from dashboard.scanner import pivot_scanner
 from dashboard.scanner.edgar import EdgarClient
+from dashboard.watchlists.store import WatchlistStore
 
 app = Flask(__name__)
 
@@ -93,15 +95,33 @@ def logout():
 PRICE_SOURCE_NAME = load_rules().get("data", {}).get("price_source", "sample")
 prices = LiveSource() if PRICE_SOURCE_NAME == "live" else SampleSource()
 news = GoogleNewsSource()
-portfolio = PaperPortfolio(prices)
+# Watchlists own the universe now: the AI analysis runs on the union of
+# every watchlist, and the portfolio asks the catalogue about risk flags.
+watchlists = WatchlistStore()
+portfolio = PaperPortfolio(prices, flags_source=watchlists.flags_by_symbol)
 edgar = EdgarClient()
 
 
 def find_asset(symbol):
-    """Look a symbol up in the universe, or None if it isn't one of ours."""
-    for asset in load_universe():
-        if asset["symbol"] == symbol:
-            return asset
+    """A stock the user has ever added to a watchlist (catalogue lookup),
+    or None. For free-range browsing of anything else, see resolve_asset."""
+    return watchlists.get_stock(symbol)
+
+
+def resolve_asset(symbol):
+    """Free-range lookup: any US-listed symbol gets a ticker page, whether
+    it's watchlisted or not. Watchlisted stocks come from the catalogue;
+    unknown ones are looked up on Yahoo (exact ticker match)."""
+    asset = find_asset(symbol)
+    if asset:
+        return asset
+    try:
+        for match in search_stocks(symbol):
+            if match["symbol"].upper() == symbol.upper():
+                return {"symbol": match["symbol"], "name": match["name"],
+                        "type": match["type"], "flags": []}
+    except RuntimeError:
+        pass  # search down → treat as not found
     return None
 
 
@@ -125,9 +145,10 @@ def home():
 
 @app.route("/ticker/<path:symbol>")
 def ticker_page(symbol):
-    """The per-ticker detail page. <path:...> lets symbols like BRK/B
-    (which contain a slash) work in the URL."""
-    asset = find_asset(symbol)
+    """The per-ticker detail page — works for ANY US-listed symbol, not
+    just watchlisted ones. <path:...> lets symbols like BRK/B (which
+    contain a slash) work in the URL."""
+    asset = resolve_asset(symbol)
     if asset is None:
         abort(404)
     return render_template("ticker.html", asset=asset)
@@ -146,17 +167,23 @@ def api_analysis():
 
 @app.route("/api/run-analysis", methods=["POST"])
 def api_run_analysis():
-    """Run a fresh analysis of every ticker in the universe. Takes a minute
-    or two —
-    the browser shows a 'running' state while it waits."""
+    """Run a fresh analysis of every WATCHLISTED stock (the union of all
+    watchlists — searching/browsing is free, only tracked stocks get the
+    paid AI treatment). Takes a minute or two."""
     try:
         provider = get_provider()
     except MissingKeyError as e:
         # Friendly message instead of a crash if the API key isn't set up yet.
         return jsonify({"status": "error", "message": str(e)}), 400
 
+    universe = watchlists.all_tracked_assets()
+    if not universe:
+        return jsonify({"status": "error",
+                        "message": "No stocks to analyse — add some to a "
+                                   "watchlist first."}), 400
+
     try:
-        result = searcher.run_analysis(provider, prices)
+        result = searcher.run_analysis(provider, prices, universe=universe)
     except Exception as e:
         return jsonify({"status": "error", "message": f"Analysis failed: {e}"}), 500
 
@@ -217,9 +244,9 @@ def api_portfolio_reset():
 @app.route("/api/ticker/<path:symbol>")
 def api_ticker(symbol):
     """Everything the detail page needs in one call: price history for the
-    chart, statistics, news headlines, the quick-screen row, and the cached
-    deep dive (if one was generated before)."""
-    asset = find_asset(symbol)
+    chart, statistics, news headlines, the quick-screen row, the cached
+    deep dive (if one was generated before), and which watchlists hold it."""
+    asset = resolve_asset(symbol)
     if asset is None:
         return jsonify({"status": "error", "message": "Unknown ticker"}), 404
 
@@ -233,21 +260,105 @@ def api_ticker(symbol):
         "screen": latest_screen_for(symbol),
         "deep_dive": deep_dive.load_cached(symbol),
         "data_source": PRICE_SOURCE_NAME,
+        "in_watchlists": watchlists.lists_containing(symbol),
     })
+
+
+# ── Watchlists & free-range search ──────────────────────────────────────
+
+@app.route("/api/search")
+def api_search():
+    """Free-range lookup: ?q=ticker-or-company-name → US-listed matches.
+    Plain data lookup, no AI — browsing costs nothing."""
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"status": "ok", "results": []})
+    try:
+        return jsonify({"status": "ok", "results": search_stocks(query)})
+    except RuntimeError as e:
+        return jsonify({"status": "error", "message": str(e)}), 502
+
+
+@app.route("/api/watchlists")
+def api_watchlists():
+    """All watchlists plus the stock catalogue (for names/flags)."""
+    return jsonify({"status": "ok", **watchlists.summary()})
+
+
+@app.route("/api/watchlists", methods=["POST"])
+def api_watchlist_create():
+    """Create a watchlist: {name, tag?}. Colours rotate if no tag given."""
+    body = request.get_json(silent=True) or {}
+    try:
+        wl = watchlists.create(body.get("name"), body.get("tag"))
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    return jsonify({"status": "ok", "watchlist": wl})
+
+
+@app.route("/api/watchlists/<wl_id>", methods=["POST", "DELETE"])
+def api_watchlist_update(wl_id):
+    """POST {name?, tag?} renames/re-colours; DELETE removes the list
+    (the stocks themselves stay in the catalogue and in any other list)."""
+    try:
+        if request.method == "DELETE":
+            watchlists.delete(wl_id)
+            return jsonify({"status": "ok"})
+        body = request.get_json(silent=True) or {}
+        wl = watchlists.update(wl_id, body.get("name"), body.get("tag"))
+        return jsonify({"status": "ok", "watchlist": wl})
+    except KeyError:
+        return jsonify({"status": "error", "message": "Unknown watchlist"}), 404
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+
+@app.route("/api/watchlists/<wl_id>/stocks", methods=["POST"])
+def api_watchlist_add_stock(wl_id):
+    """Add a stock to a watchlist: {symbol, name?, type?}. The catalogue
+    keeps one entry per stock, so flags survive remove/re-add."""
+    body = request.get_json(silent=True) or {}
+    symbol = (body.get("symbol") or "").strip().upper()
+    if not symbol:
+        return jsonify({"status": "error", "message": "No symbol given."}), 400
+    # Fill in name/type from the resolver if the browser didn't send them.
+    stock = {"symbol": symbol, "name": body.get("name"), "type": body.get("type")}
+    if not stock["name"]:
+        resolved = resolve_asset(symbol)
+        if resolved is None:
+            return jsonify({"status": "error",
+                            "message": f"Couldn't find {symbol} on a US exchange."}), 404
+        stock = resolved
+    try:
+        watchlists.add_stock(wl_id, stock)
+    except KeyError:
+        return jsonify({"status": "error", "message": "Unknown watchlist"}), 404
+    return jsonify({"status": "ok", **watchlists.summary()})
+
+
+@app.route("/api/watchlists/<wl_id>/stocks/<path:symbol>", methods=["DELETE"])
+def api_watchlist_remove_stock(wl_id, symbol):
+    """Take a stock out of one watchlist. If that was its last list, the
+    next analysis won't include it (and the next portfolio sync sells it)."""
+    try:
+        watchlists.remove_stock(wl_id, symbol)
+    except KeyError:
+        return jsonify({"status": "error", "message": "Unknown watchlist"}), 404
+    return jsonify({"status": "ok", **watchlists.summary()})
 
 
 @app.route("/api/ticker/<path:symbol>/deep-dive", methods=["POST"])
 def api_deep_dive(symbol):
     """Generate (or refresh) the plain-English deep dive for one ticker.
     Costs one AI request; the result is cached for future visits."""
-    asset = find_asset(symbol)
-    if asset is None:
-        return jsonify({"status": "error", "message": "Unknown ticker"}), 404
-
     try:
         provider = get_provider()
     except MissingKeyError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+
+    asset = resolve_asset(symbol)
+    if asset is None:
+        return jsonify({"status": "error", "message": "Unknown ticker"}), 404
 
     screen = latest_screen_for(symbol)
     conviction = screen["conviction"] if screen else "unrated"

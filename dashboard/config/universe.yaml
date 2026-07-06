@@ -1,6 +1,10 @@
-# universe.yaml — THE asset universe. The rest of the app only knows what's
-# listed here, so expanding to more stocks (or adding crypto later) means
-# editing this file, not the code.
+# universe.yaml — the MIGRATION SEED for watchlists (since 2026-07-06).
+#
+# The app used to treat this file as the fixed universe. Now watchlists
+# (data/watchlists.json) own the universe: this file is only read ONCE, on
+# first run, to create the default "CMC Invest — Single Share List"
+# watchlist. After that, add/remove stocks in the dashboard itself — the
+# AI analysis runs on whatever is watchlisted.
 #
 # Each entry:
 #   symbol — the ticker
