@@ -73,7 +73,11 @@ html[data-theme="dark"] {
   padding: 0;
 }
 
-html, body { overflow-x: hidden; }   /* wide things scroll inside their own box */
+/* Stop any sideways page drag (the portrait-overflow fix) — but with
+   `clip`, NOT `hidden`. `hidden` on html/body secretly turns the page into
+   a scroll box, which cancels `position: sticky` on the sidebar. `clip`
+   contains the same overflow WITHOUT breaking stickiness. */
+html, body { overflow-x: clip; }
 
 body {
   font-family: ui-rounded, "Arial Rounded MT Bold", "Arial Rounded MT",
