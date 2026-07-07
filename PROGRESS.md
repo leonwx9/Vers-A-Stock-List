@@ -121,10 +121,26 @@
   already in the list say so); and the Stock Searcher table gained a
   watchlist filter dropdown next to the name filter.
 
+- **Storage layer + Leon's feedback round** (2026-07-07):
+  - `dashboard/storage.py` — every saved document (watchlists, portfolio,
+    latest analysis/scan, deep-dive caches, picks audit) now goes through
+    one interface: files in data/ by default, a free cloud Postgres
+    database when DATABASE_URL is set. That's what lets the CLOUD copy
+    remember across restarts (Leon signs up to Neon/Supabase, pastes one
+    connection string into Render). Bonus fix: state is re-read before
+    every operation, so the cloud's two server workers can no longer show
+    stale data.
+  - Analysis is now scoped BEFORE running: a watchlist dropdown sits next
+    to the Run button; only that list (or all) is analysed, and the result
+    records its scope.
+  - Trade log: collapsible section in the Paper Portfolio panel showing
+    every trade ever — timestamp, BUY/SELL badge, shares @ price, and the
+    WHY in plain English (buys carry the pick's conviction + bull case;
+    sells explain shortlist-drop or stop-loss with numbers).
+
 ## Next
-- Leon: decide whether cloud watchlists should survive Render restarts
-  (needs a paid instance + disk, or an external free database) — currently
-  the Mac copy is the permanent record.
+- Leon: create the free Neon database and paste DATABASE_URL into Render.
+- Phase 2 proper: scheduled runs + track-record panel (+ email?).
 
 ## How to run
 ```

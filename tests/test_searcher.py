@@ -49,7 +49,8 @@ def test_full_run_produces_rows_and_shortlist(tmp_path, monkeypatch):
     # Redirect the save locations into a temp folder so tests don't write
     # into the real data/ and picks/ directories.
     import dashboard.analysis.searcher as s
-    monkeypatch.setattr(s, "DATA_DIR", tmp_path / "data")
+    import dashboard.storage as storage
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(s, "PICKS_DIR", tmp_path / "picks")
 
     result = run_analysis(FakeProvider(), SampleSource(),

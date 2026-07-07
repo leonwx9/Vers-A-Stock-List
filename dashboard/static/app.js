@@ -41,12 +41,34 @@ async function loadExisting() {
 }
 
 /* ── 2. Run a fresh analysis when the button is pressed ───────────────── */
+/* The dropdown NEXT TO the button decides what gets analysed — one
+   watchlist, or all of them. Chosen first, then Run. */
+const scopeSelect = document.getElementById("analyze-scope");
+scopeSelect.addEventListener("change", () =>
+  localStorage.setItem("analyze-scope", scopeSelect.value));
+
+function fillScopeOptions() {
+  // The saved choice can only be applied once the options exist.
+  const saved = localStorage.getItem("analyze-scope") || "all";
+  scopeSelect.innerHTML = `<option value="all">All watchlists</option>` +
+    wlData.watchlists.map((w) =>
+      `<option value="${w.id}">${w.name}</option>`).join("");
+  // Keep the previous choice if that list still exists.
+  scopeSelect.value =
+    [...scopeSelect.options].some((o) => o.value === saved) ? saved : "all";
+}
+
 runButton.addEventListener("click", async () => {
   runButton.disabled = true;
-  statusLine.textContent = "Running analysis of the full universe — this takes a minute or two…";
+  const scopeName = scopeSelect.selectedOptions[0].textContent;
+  statusLine.textContent =
+    `Running analysis of ${scopeName} — this takes a minute or two…`;
   showSkeletons();
   try {
-    const res = await fetch("/api/run-analysis", { method: "POST" });
+    const res = await fetch("/api/run-analysis", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ watchlist: scopeSelect.value }),
+    });
     const data = await res.json();
     if (data.status === "ok") {
       render(data);
@@ -85,7 +107,8 @@ function openTicker(symbol) {
 /* ── Drawing ──────────────────────────────────────────────────────────── */
 function render(data) {
   statusLine.textContent =
-    `Last run: ${data.run_at.replace("T", " ")} · data source: ${data.data_source}`;
+    `Last run: ${data.run_at.replace("T", " ")} · analysed: ${data.scope || "all watchlists"}` +
+    ` · data source: ${data.data_source}`;
   currentRows = data.rows;
   renderShortlist(data);
   renderTable();
@@ -305,6 +328,49 @@ function renderPortfolio(data) {
 
   drawPortfolioChart(data.history);
   renderHoldings(data.holdings);
+  renderTrades(data.trades || []);
+}
+
+/* ── The trade log: every trade, when it happened, and WHY ────────────── */
+let tradesCollapsed = localStorage.getItem("collapse-trades") !== "0"; // default: folded
+
+function renderTrades(trades) {
+  const box = document.getElementById("pf-trades");
+  const toggleBtn = `<button id="toggle-trades" class="mini-btn">
+    ${tradesCollapsed ? "Show" : "Hide"}</button>`;
+  const head = `
+    <div class="panel-header" style="margin-top:1rem">
+      <h3 class="subheading">Trade log (${trades.length})
+        <span class="hint">trades happen when you press “Sync to shortlist”</span></h3>
+      ${toggleBtn}
+    </div>`;
+
+  if (tradesCollapsed || !trades.length) {
+    box.innerHTML = head + (trades.length ? "" :
+      `<p class="status-line">No trades yet — sync the portfolio after an analysis.</p>`);
+    wireTradesToggle(trades);
+    return;
+  }
+
+  // Newest first, like a message log.
+  const items = [...trades].reverse().map((t) => `
+    <div class="trade-item">
+      <span class="trade-when">${t.at.replace("T", " ")}</span>
+      <span class="trade-badge ${t.action}">${t.action.toUpperCase()}</span>
+      <span class="trade-what">${t.shares} × ${t.symbol} @ $${t.price}</span>
+      <span class="trade-why">${t.reason}</span>
+    </div>`).join("");
+
+  box.innerHTML = head + `<div class="trade-log">${items}</div>`;
+  wireTradesToggle(trades);
+}
+
+function wireTradesToggle(trades) {
+  document.getElementById("toggle-trades").addEventListener("click", () => {
+    tradesCollapsed = !tradesCollapsed;
+    localStorage.setItem("collapse-trades", tradesCollapsed ? "1" : "0");
+    renderTrades(trades);
+  });
 }
 
 function drawPortfolioChart(history) {
@@ -421,6 +487,7 @@ async function loadWatchlists() {
   const res = await fetch("/api/watchlists");
   wlData = await res.json();
   renderWatchlists();
+  fillScopeOptions();                     // the analyse-this dropdown
   if (currentRows.length) renderTable();  // (re)fill the watchlist filter
 }
 
@@ -430,6 +497,7 @@ function updateWatchlists(data) {
   if (data.watchlists) {
     wlData = data;
     renderWatchlists();
+    fillScopeOptions();
     if (currentRows.length) renderTable();
   }
 }

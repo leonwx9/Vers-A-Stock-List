@@ -66,8 +66,8 @@ def test_deep_dive_parser_strips_code_fences():
 
 
 def test_run_deep_dive_saves_cache(tmp_path, monkeypatch):
-    import dashboard.analysis.deep_dive as dd
-    monkeypatch.setattr(dd, "DATA_DIR", tmp_path)
+    import dashboard.storage as storage
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
 
     asset = {"symbol": "BRK/B", "name": "Berkshire", "type": "stock", "flags": []}
     quote = {"price": 465.0, "change_5d_pct": 1.2, "change_30d_pct": 3.4}

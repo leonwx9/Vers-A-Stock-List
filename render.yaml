@@ -30,3 +30,6 @@ services:
         sync: false               # you paste this in Render's dashboard (secret)
       - key: SEC_EDGAR_CONTACT
         sync: false               # optional: "YourName you@email.com"
+      - key: DATABASE_URL
+        sync: false               # free Neon/Supabase Postgres connection
+                                  # string — makes saved data survive restarts

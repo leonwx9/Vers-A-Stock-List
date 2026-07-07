@@ -24,9 +24,9 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from ..config_loader import load_rules
+from ..storage import get_doc
 from .edgar import is_tech_company
 
-DATA_DIR = Path(__file__).parent.parent / "data"
 
 # The disclosure language we hunt for. Editable without touching code logic.
 # Checked against real EDGAR data (July 2026): "AI strategy" is what filers
@@ -204,16 +204,10 @@ def run_scan(provider, edgar, rules=None, on_progress=None):
         "excluded": excluded,
     }
 
-    DATA_DIR.mkdir(exist_ok=True)
-    with open(DATA_DIR / "scanner_latest.json", "w") as f:
-        json.dump(result, f, indent=2)
+    get_doc("scanner_latest").save(result)
     return result
 
 
 def load_latest():
     """Return the last saved scan, or None if no scan has happened yet."""
-    path = DATA_DIR / "scanner_latest.json"
-    if not path.exists():
-        return None
-    with open(path) as f:
-        return json.load(f)
+    return get_doc("scanner_latest").load()

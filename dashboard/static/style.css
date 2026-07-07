@@ -604,6 +604,40 @@ html { scroll-behavior: smooth; }
 .excluded-list summary { cursor: pointer; }
 .excluded-list ul { margin: 0.5rem 0 0 1.25rem; }
 
+/* ── The trade log (paper portfolio) ───────────────────────────────── */
+.trade-log {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  max-height: 320px;
+  overflow-y: auto;      /* long histories scroll inside the box */
+}
+
+.trade-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.82rem;
+}
+.trade-item:last-child { border-bottom: none; }
+
+.trade-when { color: var(--ink-soft); font-size: 0.75rem; white-space: nowrap; }
+
+.trade-badge {
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--paper);
+}
+.trade-badge.buy { background: var(--accent); }
+.trade-badge.sell { background: var(--red); }
+
+.trade-what { font-weight: bold; white-space: nowrap; }
+.trade-why { color: var(--ink-soft); flex: 1; min-width: 200px; }
+
 /* ── Watchlists panel ──────────────────────────────────────────────── */
 .search-box { position: relative; margin-bottom: 0.5rem; }
 .search-box .filter-input { width: 100%; }

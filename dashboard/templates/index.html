@@ -66,7 +66,13 @@
           <h2>Stock Searcher</h2>
           <p class="panel-subtitle">watchlisted stocks · bull vs bear · conviction scores · paper portfolio</p>
         </div>
-        <button id="run-analysis-btn" class="action-btn">Run analysis</button>
+        <!-- Pick WHICH watchlist to analyse, then press Run. -->
+        <div class="btn-row">
+          <select id="analyze-scope" class="range-select" title="Which watchlist the analysis covers">
+            <option value="all">All watchlists</option>
+          </select>
+          <button id="run-analysis-btn" class="action-btn">Run analysis</button>
+        </div>
       </div>
 
       <!-- Status line: shows "running…", errors, or when the last run happened. -->
@@ -104,6 +110,9 @@
 
       <!-- Current holdings -->
       <div id="pf-holdings" class="table-wrap"></div>
+
+      <!-- Every trade ever made: when, what, and why. Collapsible. -->
+      <div id="pf-trades"></div>
     </section>
 
     <!-- ── Section 3: the AI Pivot Scanner ───────────────────────────── -->

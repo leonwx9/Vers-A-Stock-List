@@ -19,10 +19,10 @@ from datetime import date, datetime
 from pathlib import Path
 
 from ..config_loader import load_rules, load_universe
+from ..storage import get_doc
 
 # Where results are stored. data/ holds machine-readable JSON (gitignored);
 # picks/ holds the human-readable dated audit files (committed).
-DATA_DIR = Path(__file__).parent.parent / "data"
 PICKS_DIR = Path(__file__).parent.parent.parent / "picks"
 
 SYSTEM_PROMPT = """\
@@ -88,13 +88,16 @@ def parse_batch_response(text, expected_tickers):
     return results
 
 
-def run_analysis(provider, source, universe=None, rules=None, on_progress=None):
+def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
+                 scope_name=None):
     """Run one full analysis. Returns the result dict (also saved to disk).
 
     provider — an LLM provider (from llm.provider.get_provider())
     source   — a PriceSource (SampleSource now, live later)
     universe/rules — injectable for tests; default to the config files
     on_progress — optional callback(batches_done, batches_total)
+    scope_name — label for WHAT was analysed (e.g. one watchlist's name),
+                 recorded in the result so the page can say so
     """
     universe = universe or load_universe()
     rules = rules or load_rules()
@@ -159,6 +162,7 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None):
     result = {
         "run_at": datetime.now().isoformat(timespec="seconds"),
         "data_source": data_source,
+        "scope": scope_name or "all watchlists",
         "shortlist": shortlist,
         "rows": rows,
     }
@@ -168,10 +172,9 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None):
 
 
 def _save(result, rows, shortlist):
-    """Write the JSON the web page reads + the dated picks/ audit file."""
-    DATA_DIR.mkdir(exist_ok=True)
-    with open(DATA_DIR / "analysis_latest.json", "w") as f:
-        json.dump(result, f, indent=2)
+    """Save the result the web page reads (file or cloud database — see
+    storage.py) + the dated picks/ audit file."""
+    get_doc("analysis_latest").save(result)
 
     PICKS_DIR.mkdir(exist_ok=True)
     by_symbol = {r["symbol"]: r for r in rows}
@@ -198,14 +201,17 @@ def _save(result, rows, shortlist):
             "- Outcome: profit / loss / still holding",
             "",
         ]
+    markdown = "\n".join(lines)
     with open(PICKS_DIR / f"{date.today().isoformat()}.md", "w") as f:
-        f.write("\n".join(lines))
+        f.write(markdown)
+    # Also keep the audit trail in storage — on the cloud, the .md file
+    # above lands on a disk that forgets, but the database doesn't.
+    picks_doc = get_doc("picks")
+    all_picks = picks_doc.load() or {}
+    all_picks[date.today().isoformat()] = markdown
+    picks_doc.save(all_picks)
 
 
 def load_latest():
     """Return the last saved analysis, or None if no run has happened yet."""
-    path = DATA_DIR / "analysis_latest.json"
-    if not path.exists():
-        return None
-    with open(path) as f:
-        return json.load(f)
+    return get_doc("analysis_latest").load()

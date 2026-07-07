@@ -52,6 +52,7 @@ never reach GitHub.
 | `DASHBOARD_PASSWORD` | set = every page needs a password (cloud); empty = open (local) |
 | `FLASK_SECRET_KEY` | keeps you logged in across restarts (any long random string) |
 | `SEC_EDGAR_CONTACT` | optional "Name email" our EDGAR requests identify as |
+| `DATABASE_URL` | optional free cloud Postgres — set it and saved data (watchlists, portfolio…) lives there instead of local files, so the cloud copy survives restarts |
 
 **Switching AI provider is two lines**: change `LLM_PROVIDER=openrouter` to
 `anthropic` and fill in `ANTHROPIC_API_KEY`. Nothing else changes.

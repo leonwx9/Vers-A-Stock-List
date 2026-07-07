@@ -16,20 +16,19 @@ How it works, in plain English:
 Everything lives in data/portfolio.json (gitignored — it's runtime data).
 """
 
-import json
 from datetime import date, datetime
-from pathlib import Path
 
 from ..config_loader import load_rules, load_universe
-
-STATE_PATH = Path(__file__).parent.parent / "data" / "portfolio.json"
+from ..storage import FileDoc, get_doc
 
 
 class PaperPortfolio:
     def __init__(self, source, rules=None, state_path=None, flags_source=None):
         self.source = source                       # any PriceSource
         self.rules = (rules or load_rules())["portfolio"]
-        self.state_path = Path(state_path or STATE_PATH)
+        # state_path — tests point this at a temp file; normally the
+        # document lives wherever storage.py says (file, or cloud database).
+        self.doc = FileDoc(state_path) if state_path else get_doc("portfolio")
         # Where to ask "which risk flags does this symbol carry?" — the app
         # passes the watchlist catalogue; the default (the old fixed
         # universe file) keeps existing tests working unchanged.
@@ -37,28 +36,32 @@ class PaperPortfolio:
             lambda: {a["symbol"]: set(a["flags"]) for a in load_universe()})
         self.state = self._load()
 
-    # ── State on disk ───────────────────────────────────────────────────
-    def _load(self):
-        if self.state_path.exists():
-            with open(self.state_path) as f:
-                return json.load(f)
+    # ── Saved state ─────────────────────────────────────────────────────
+    def _fresh_state(self):
         # A brand-new portfolio: all cash, no positions, no history yet.
         return {
             "cash": self.rules["starting_cash"],
             "positions": {},   # symbol -> {shares, avg_cost, opened_at}
-            "trades": [],      # every buy/sell ever made
+            "trades": [],      # every buy/sell ever made, with the reason
             "history": [],     # daily {date, total_value} points for the graph
         }
 
+    def _load(self):
+        return self.doc.load() or self._fresh_state()
+
+    def _refresh(self):
+        """Re-read before acting — on the cloud, two server workers share
+        one database, and each must see the other's trades."""
+        saved = self.doc.load()
+        if saved is not None:
+            self.state = saved
+
     def _save(self):
-        self.state_path.parent.mkdir(exist_ok=True)
-        with open(self.state_path, "w") as f:
-            json.dump(self.state, f, indent=2)
+        self.doc.save(self.state)
 
     def reset(self):
         """Wipe everything and start over with fresh pretend cash."""
-        self.state_path.unlink(missing_ok=True)
-        self.state = self._load()
+        self.state = self._fresh_state()
         self._save()
 
     # ── Valuation ───────────────────────────────────────────────────────
@@ -110,9 +113,15 @@ class PaperPortfolio:
         }
         self._log_trade("buy", symbol, shares, price, reason)
 
-    def sync_to_shortlist(self, shortlist):
+    def sync_to_shortlist(self, shortlist, why=None):
         """Make the portfolio mirror the shortlist (the 3 steps up top).
-        Returns the list of trades made this sync."""
+        Returns the list of trades made this sync.
+
+        why — optional {symbol: reason text} from the analysis (conviction,
+        bull case) so the trade log can explain each buy in plain English.
+        """
+        why = why or {}
+        self._refresh()
         trades_before = len(self.state["trades"])
         excluded = set(self.rules["excluded_flags"])
         flags_by_symbol = self.flags_source()
@@ -123,9 +132,14 @@ class PaperPortfolio:
             price = self.source.get_quote(symbol)["price"]
             pos = self.state["positions"][symbol]
             if symbol not in shortlist:
-                self._sell(symbol, price, "dropped off shortlist")
+                self._sell(symbol, price,
+                           "dropped off the shortlist — the latest analysis "
+                           "no longer ranks it in the top picks")
             elif price < pos["avg_cost"] * (1 - stop_loss):
-                self._sell(symbol, price, f"stop-loss: down >{self.rules['stop_loss_pct']}% from entry")
+                self._sell(symbol, price,
+                           f"stop-loss: fell more than "
+                           f"{self.rules['stop_loss_pct']}% below the "
+                           f"${pos['avg_cost']} we paid")
 
         # 3: buy shortlisted tickers we don't hold.
         for symbol in shortlist:
@@ -134,7 +148,7 @@ class PaperPortfolio:
             if flags_by_symbol.get(symbol, set()) & excluded:
                 continue  # belt-and-braces: never buy risk-flagged products
             self._buy(symbol, self.source.get_quote(symbol)["price"],
-                      "on shortlist")
+                      why.get(symbol, "on the shortlist"))
 
         self.snapshot()  # also saves
         return self.state["trades"][trades_before:]
@@ -142,6 +156,7 @@ class PaperPortfolio:
     # ── What the web page needs ─────────────────────────────────────────
     def summary(self):
         """Everything the portfolio panel displays, in one dict."""
+        self._refresh()
         holdings = []
         for symbol, pos in sorted(self.state["positions"].items()):
             price = self.source.get_quote(symbol)["price"]
@@ -165,5 +180,5 @@ class PaperPortfolio:
             "since_start_pct": round((total - start) / start * 100, 2),
             "holdings": holdings,
             "history": self.state["history"],
-            "trades": self.state["trades"][-20:],  # the recent activity feed
+            "trades": self.state["trades"],  # the full log: when + what + why
         }

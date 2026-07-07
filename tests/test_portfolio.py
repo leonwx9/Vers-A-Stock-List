@@ -57,6 +57,7 @@ def test_stop_loss_sells_a_big_loser_even_if_still_shortlisted(tmp_path):
     pf.sync_to_shortlist(["AAPL"])
     # Pretend we paid far more than today's price — a >10% loss.
     pf.state["positions"]["AAPL"]["avg_cost"] *= 2
+    pf._save()  # sync re-reads saved state, so the tampering must be saved
 
     trades = pf.sync_to_shortlist(["AAPL"])
     actions = [(t["action"], t["symbol"]) for t in trades]

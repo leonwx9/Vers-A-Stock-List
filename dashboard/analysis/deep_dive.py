@@ -7,16 +7,16 @@ but in plain English: technical / sentiment / fundamentals scores, each with
 an explanation a beginner can follow, and — crucially — the sentiment claims
 must point at the actual news headlines we fetched, not vague hand-waving.
 
-Results are cached to data/deepdive_<symbol>.json so revisiting a page is
-free and instant; the Refresh button forces a new AI call.
+Results are cached (one document per symbol — file or cloud database, see
+storage.py) so revisiting a page is free and instant; the Refresh button
+forces a new AI call.
 """
 
 import json
 import re
 from datetime import datetime
-from pathlib import Path
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+from ..storage import get_doc
 
 SYSTEM_PROMPT = """\
 You are the analysis engine inside a private paper-trading dashboard.
@@ -63,18 +63,14 @@ Return ONE JSON object with exactly these keys:
                       rating go up or down"""
 
 
-def _cache_path(symbol):
-    # BRK/B → deepdive_BRK-B.json (slashes can't appear in file names).
-    return DATA_DIR / f"deepdive_{symbol.replace('/', '-')}.json"
+def _cache_doc(symbol):
+    # BRK/B → deepdive_BRK-B (slashes can't appear in document names).
+    return get_doc(f"deepdive_{symbol.replace('/', '-')}")
 
 
 def load_cached(symbol):
     """Return the saved deep dive for a symbol, or None."""
-    path = _cache_path(symbol)
-    if not path.exists():
-        return None
-    with open(path) as f:
-        return json.load(f)
+    return _cache_doc(symbol).load()
 
 
 def parse_deep_dive_response(text):
@@ -113,7 +109,5 @@ def run_deep_dive(provider, asset, quote, headlines, conviction):
     result["symbol"] = asset["symbol"]
     result["generated_at"] = datetime.now().isoformat(timespec="seconds")
 
-    DATA_DIR.mkdir(exist_ok=True)
-    with open(_cache_path(asset["symbol"]), "w") as f:
-        json.dump(result, f, indent=2)
+    _cache_doc(asset["symbol"]).save(result)
     return result

@@ -167,23 +167,36 @@ def api_analysis():
 
 @app.route("/api/run-analysis", methods=["POST"])
 def api_run_analysis():
-    """Run a fresh analysis of every WATCHLISTED stock (the union of all
-    watchlists — searching/browsing is free, only tracked stocks get the
-    paid AI treatment). Takes a minute or two."""
+    """Run a fresh analysis of watchlisted stocks. The browser sends
+    {"watchlist": <id>} to analyse ONE list, or "all" (the union of every
+    list). Searching/browsing is free — only what's here costs AI money."""
     try:
         provider = get_provider()
     except MissingKeyError as e:
         # Friendly message instead of a crash if the API key isn't set up yet.
         return jsonify({"status": "error", "message": str(e)}), 400
 
-    universe = watchlists.all_tracked_assets()
+    # Which watchlist is this run scoped to? (Chosen before pressing Run.)
+    body = request.get_json(silent=True) or {}
+    wl_id = body.get("watchlist", "all")
+    if wl_id == "all":
+        universe, scope_name = watchlists.all_tracked_assets(), None
+    else:
+        try:
+            universe = watchlists.assets_in(wl_id)
+            scope_name = next(w["name"] for w in watchlists.summary()["watchlists"]
+                              if w["id"] == wl_id)
+        except (KeyError, StopIteration):
+            return jsonify({"status": "error",
+                            "message": "That watchlist no longer exists."}), 404
     if not universe:
         return jsonify({"status": "error",
                         "message": "No stocks to analyse — add some to a "
                                    "watchlist first."}), 400
 
     try:
-        result = searcher.run_analysis(provider, prices, universe=universe)
+        result = searcher.run_analysis(provider, prices, universe=universe,
+                                       scope_name=scope_name)
     except Exception as e:
         return jsonify({"status": "error", "message": f"Analysis failed: {e}"}), 500
 
@@ -230,7 +243,12 @@ def api_portfolio_sync():
         return jsonify({"status": "error",
                         "message": "Run an analysis first — the portfolio "
                                    "buys from the shortlist."}), 400
-    trades = portfolio.sync_to_shortlist(latest["shortlist"])
+    # Hand the engine each pick's conviction + bull case, so the trade log
+    # can say WHY every buy happened in plain English.
+    why = {r["symbol"]: f"on the shortlist — conviction {r['conviction']}/10; "
+                        f"bull case: {r['bull']}"
+           for r in latest["rows"] if r["symbol"] in latest["shortlist"]}
+    trades = portfolio.sync_to_shortlist(latest["shortlist"], why=why)
     return jsonify({"status": "ok", "trades_made": trades, **portfolio.summary()})
 
 

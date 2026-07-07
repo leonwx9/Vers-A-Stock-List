@@ -18,13 +18,10 @@ from config/universe.yaml — the old fixed 98-ticker list becomes the
 default "CMC Invest — Single Share List" watchlist, risk flags preserved.
 """
 
-import json
 import secrets
-from pathlib import Path
 
 from ..config_loader import load_universe
-
-STATE_PATH = Path(__file__).parent.parent / "data" / "watchlists.json"
+from ..storage import FileDoc, get_doc
 
 DEFAULT_LIST_NAME = "CMC Invest — Single Share List"
 
@@ -45,17 +42,27 @@ def _new_id():
 class WatchlistStore:
     def __init__(self, state_path=None, seed_universe=None):
         """seed_universe — injectable for tests; defaults to universe.yaml,
-        which is only used ONCE (the first-run migration)."""
-        self.state_path = Path(state_path or STATE_PATH)
+        which is only used ONCE (the first-run migration).
+        state_path — tests point this at a temp file; normally the document
+        lives wherever storage.py says (a file, or the cloud database)."""
+        self.doc = FileDoc(state_path) if state_path else get_doc("watchlists")
         self._seed_universe = seed_universe
         self.state = self._load()
 
-    # ── State on disk ───────────────────────────────────────────────────
+    # ── Saved state ─────────────────────────────────────────────────────
     def _load(self):
-        if self.state_path.exists():
-            with open(self.state_path) as f:
-                return json.load(f)
+        saved = self.doc.load()
+        if saved is not None:
+            return saved
         return self._migrate_from_universe()
+
+    def _refresh(self):
+        """Re-read before acting. Matters on the cloud, where two server
+        workers share one database — without this, the worker that didn't
+        handle your last change would show you its stale memory."""
+        saved = self.doc.load()
+        if saved is not None:
+            self.state = saved
 
     def _migrate_from_universe(self):
         """First run: turn the old fixed universe into the default watchlist
@@ -79,13 +86,12 @@ class WatchlistStore:
         return state
 
     def _save(self):
-        self.state_path.parent.mkdir(exist_ok=True)
-        with open(self.state_path, "w") as f:
-            json.dump(self.state, f, indent=2)
+        self.doc.save(self.state)
 
     # ── Reading ─────────────────────────────────────────────────────────
     def summary(self):
         """Everything the watchlists panel displays."""
+        self._refresh()
         return {
             "watchlists": [
                 {**wl, "count": len(wl["symbols"])} for wl in self.state["watchlists"]
@@ -97,6 +103,7 @@ class WatchlistStore:
         """Every stock sitting in AT LEAST ONE watchlist — the universe the
         AI analysis runs on. Same shape load_universe() returned, so the
         searcher/portfolio code didn't have to change."""
+        self._refresh()
         tracked = []
         seen = set()
         for wl in self.state["watchlists"]:
@@ -108,18 +115,28 @@ class WatchlistStore:
                 tracked.append({"symbol": symbol, **info})
         return sorted(tracked, key=lambda a: a["symbol"])
 
+    def assets_in(self, wl_id):
+        """The stocks of ONE watchlist, in universe shape — used when the
+        analysis is scoped to a single list instead of all of them."""
+        self._refresh()
+        wl = self._find(wl_id)
+        return [{"symbol": s, **self.state["stocks"][s]} for s in wl["symbols"]]
+
     def flags_by_symbol(self):
         """symbol -> set of risk flags, for the portfolio's buy check."""
+        self._refresh()
         return {s: set(info["flags"]) for s, info in self.state["stocks"].items()}
 
     def get_stock(self, symbol):
         """The catalogue entry for a symbol (with its symbol included),
         or None if we've never seen it."""
+        self._refresh()
         info = self.state["stocks"].get(symbol)
         return {"symbol": symbol, **info} if info else None
 
     def lists_containing(self, symbol):
         """Ids of every watchlist this symbol sits in."""
+        self._refresh()
         return [wl["id"] for wl in self.state["watchlists"] if symbol in wl["symbols"]]
 
     def _find(self, wl_id):
@@ -130,6 +147,7 @@ class WatchlistStore:
 
     # ── Managing watchlists ─────────────────────────────────────────────
     def create(self, name, tag=None):
+        self._refresh()
         name = (name or "").strip()
         if not name:
             raise ValueError("A watchlist needs a name.")
@@ -144,6 +162,7 @@ class WatchlistStore:
 
     def update(self, wl_id, name=None, tag=None):
         """Rename and/or re-tag a watchlist (id never changes)."""
+        self._refresh()
         wl = self._find(wl_id)
         if name is not None:
             name = name.strip()
@@ -156,6 +175,7 @@ class WatchlistStore:
         return wl
 
     def delete(self, wl_id):
+        self._refresh()
         wl = self._find(wl_id)
         self.state["watchlists"].remove(wl)
         self._save()
@@ -166,6 +186,7 @@ class WatchlistStore:
         (e.g. straight from a search result). If the catalogue already
         knows the symbol, the existing entry — including its risk flags —
         is kept; a brand-new symbol starts with no flags."""
+        self._refresh()
         wl = self._find(wl_id)
         symbol = stock["symbol"]
         if symbol not in self.state["stocks"]:
@@ -182,6 +203,7 @@ class WatchlistStore:
         """Take a stock out of ONE watchlist. It stays in the catalogue
         (so its flags are remembered if re-added) and stays analysed as
         long as any other watchlist still holds it."""
+        self._refresh()
         wl = self._find(wl_id)
         if symbol in wl["symbols"]:
             wl["symbols"].remove(symbol)

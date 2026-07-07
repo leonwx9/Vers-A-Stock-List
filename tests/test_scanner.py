@@ -89,8 +89,8 @@ RULES = {
 
 
 def test_scan_excludes_tech_and_reports_the_rest(tmp_path, monkeypatch):
-    import dashboard.scanner.pivot_scanner as ps
-    monkeypatch.setattr(ps, "DATA_DIR", tmp_path)
+    import dashboard.storage as storage
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
 
     result = run_scan(FakeProvider(), FakeEdgar(), rules=RULES)
 
@@ -109,8 +109,8 @@ def test_scan_excludes_tech_and_reports_the_rest(tmp_path, monkeypatch):
 
 
 def test_scan_puts_non_qualifiers_in_excluded(tmp_path, monkeypatch):
-    import dashboard.scanner.pivot_scanner as ps
-    monkeypatch.setattr(ps, "DATA_DIR", tmp_path)
+    import dashboard.storage as storage
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
 
     class SkepticalProvider:
         def complete(self, system, user, max_tokens=4000):
