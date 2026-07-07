@@ -14,8 +14,11 @@ let wlFilter = "all";                       // which watchlist the table shows
 
 // Collapse preferences survive page reloads via localStorage (a tiny
 // key-value store the browser keeps per site).
-let tableCollapsed = localStorage.getItem("collapse-tickers") === "1";
-let holdingsCollapsed = localStorage.getItem("collapse-holdings") === "1";
+// Everything hideable starts HIDDEN (the "!== '0'" pattern): folded unless
+// the user has explicitly opened it before (which saves "0"). This keeps a
+// freshly-opened dashboard — especially the cloud one on a phone — tidy.
+let tableCollapsed = localStorage.getItem("collapse-tickers") !== "0";
+let holdingsCollapsed = localStorage.getItem("collapse-holdings") !== "0";
 
 // Which period the change column shows (1D … All time), remembered per browser.
 const CHANGE_RANGES = ["1D", "1W", "1M", "3M", "1Y", "5Y", "ALL"];
@@ -514,7 +517,7 @@ function renderWatchlists() {
     `<button class="swatch" data-color="${c}" style="background:${c}"></button>`).join("");
 
   const cards = wlData.watchlists.map((wl) => {
-    const collapsed = localStorage.getItem(`wl-collapsed-${wl.id}`) === "1";
+    const collapsed = localStorage.getItem(`wl-collapsed-${wl.id}`) !== "0";
     const rows = wl.symbols.map((s) => {
       const info = wlData.stocks[s] || {};
       const flags = (info.flags || [])
@@ -586,7 +589,7 @@ function renderWatchlists() {
 
     // ▾/▸ collapses the list (remembered per list, like the big tables).
     card.querySelector(".wl-chev").addEventListener("click", () => {
-      const collapsed = localStorage.getItem(`wl-collapsed-${id}`) === "1";
+      const collapsed = localStorage.getItem(`wl-collapsed-${id}`) !== "0";
       localStorage.setItem(`wl-collapsed-${id}`, collapsed ? "0" : "1");
       renderWatchlists();
     });
