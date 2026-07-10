@@ -116,6 +116,16 @@ portfolio.json files must keep working):
   open"), budget, placed time, and status. Recently replaced/filled orders
   show greyed at the bottom (last ~10).
 - Trade log unchanged in shape — fills arrive there with their reasons.
+- New collapsible **"Sell decisions"** section directly UNDER the Trade
+  Log (Leon asked for this explicitly): for every holding the latest
+  analysis reviewed, show a HOLD or SELL badge (SELL in signal red), the
+  stock, and the AI's full reasoning sentence — so Leon can read WHY
+  selling (or keeping) was judged best, not just see the resulting trade.
+  Data comes from `result["held_reviews"]` — persist the latest reviews
+  (e.g. store them on the portfolio state or read analysis_latest in the
+  portfolio panel's JS) so the section survives reloads. Same collapse
+  pattern as everything else, default hidden. Stop-loss sells aren't AI
+  decisions — the trade log entry's reason covers those.
 - Panel subtitle/status wording: explain that orders fill automatically
   against completed sessions ("checked whenever the dashboard loads").
 
