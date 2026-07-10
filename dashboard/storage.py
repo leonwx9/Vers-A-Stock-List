@@ -36,8 +36,14 @@ class FileDoc:
 
     def save(self, data):
         self.path.parent.mkdir(exist_ok=True)
-        with open(self.path, "w") as f:
+        # Write to a scratch file first, then swap it into place. os.replace
+        # is atomic (all-or-nothing): if the app dies mid-write, the old
+        # file survives intact instead of being left half-written — a
+        # corrupted watchlists/portfolio file would stop the app booting.
+        tmp_path = self.path.with_suffix(".json.tmp")
+        with open(tmp_path, "w") as f:
             json.dump(data, f, indent=2)
+        os.replace(tmp_path, self.path)
 
     def delete(self):
         self.path.unlink(missing_ok=True)

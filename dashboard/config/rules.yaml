@@ -9,7 +9,8 @@ data:
 
 portfolio:
   starting_cash: 10000        # pretend money the paper portfolio starts with (USD)
-  whole_shares_only: true     # CMC Invest sells whole shares only — mirror that
+  # Buys are always WHOLE shares (CMC Invest sells whole shares only) —
+  # that rule lives in the engine itself, it isn't configurable.
   max_position_value: 800     # max USD per pick — mirrors CMC's $1,200 AUD cap (~US$800)
   # Risk flags the paper portfolio and shortlist refuse to buy. These products
   # decay/swing in ways that would make the results misleading. Remove a flag
@@ -20,7 +21,6 @@ portfolio:
 
 analysis:
   batch_size: 10              # tickers sent to the AI per request (fewer = slower + pricier)
-  history_days: 120           # how much price history to generate/consider
   max_workers: 3              # AI requests running at the same time
 
 # AI Pivot Scanner rules.

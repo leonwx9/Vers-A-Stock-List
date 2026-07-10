@@ -30,7 +30,9 @@ your portfolio history and picks live on the Mac (and in git).
    mirrors the new shortlist: sells drops, sells anything down more than
    10% (stop-loss), buys the new picks. Every trade is logged. (Heads-up:
    removing a stock from ALL watchlists drops it from the next analysis,
-   so the next sync sells it.)
+   so the next full sync sells it.) If the last analysis was scoped to ONE
+   watchlist, syncing only trades within that list — holdings the run
+   never looked at are left alone (stop-loss still applies to everything).
 4. **Scan EDGAR** (AI Pivot Scanner panel) — whenever you're curious.
    Finding *nothing* is normal; genuine small-cap non-tech AI pivots are
    rare, which is rather the point.
@@ -55,6 +57,7 @@ weeks of routine before it says anything meaningful.
 |---|---|---|
 | "API key" error in the app | key missing/typo in `.env` | fix `.env`, restart the app |
 | Analysis fails mid-run | AI provider hiccup or credit ran out | check openrouter.ai, try again |
+| "already running" when you press Run | another run is in progress (maybe from another tab/device) | wait for it — this guard protects your AI credit |
 | Prices look stale | 5-minute cache | wait 5 min, reload |
 | No news headlines on a ticker | Google News hiccup | harmless; try later |
 | Scanner shows fewer results than expected | SEC throttled us (it retries politely) | run the scan again in a minute |

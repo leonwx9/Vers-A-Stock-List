@@ -13,6 +13,16 @@ def test_filedoc_roundtrip(tmp_path):
     doc.delete()                              # deleting twice is fine
 
 
+def test_filedoc_save_leaves_no_scratch_file_behind(tmp_path):
+    # Saves go via a scratch file that's atomically swapped into place —
+    # after a save, only the real document should exist.
+    doc = FileDoc(tmp_path / "thing.json")
+    doc.save({"a": 1})
+    doc.save({"a": 2})                        # overwrite the same way
+    assert doc.load() == {"a": 2}
+    assert [p.name for p in tmp_path.iterdir()] == ["thing.json"]
+
+
 def test_get_doc_uses_files_without_database_url(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     assert isinstance(get_doc("anything"), FileDoc)

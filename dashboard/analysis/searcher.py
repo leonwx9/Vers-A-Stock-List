@@ -15,7 +15,7 @@ One "run" does this:
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 from ..config_loader import load_rules, load_universe
@@ -83,7 +83,16 @@ def parse_batch_response(text, expected_tickers):
         if ticker not in expected_tickers:
             continue  # ignore anything we didn't ask about
         # Force conviction into a safe 1-10 integer even if the model strays.
-        item["conviction"] = max(1, min(10, int(item.get("conviction", 1))))
+        # A non-number (e.g. "high") becomes the minimum score rather than
+        # crashing the whole (paid) run over one bad field.
+        try:
+            conviction = int(float(item.get("conviction", 1)))
+        except (TypeError, ValueError):
+            conviction = 1
+        item["conviction"] = max(1, min(10, conviction))
+        # Normalise the verdict ("Bull", " BEAR " → "bull"/"bear") so the
+        # shortlist check below can rely on it.
+        item["verdict"] = str(item.get("verdict", "")).strip().lower()
         results[ticker] = item
     return results
 
@@ -125,12 +134,21 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
     batches = [universe[i : i + batch_size] for i in range(0, len(universe), batch_size)]
     done_count = 0
 
+    batch_errors = []
+
     def analyze_batch(batch):
         tickers = {a["symbol"] for a in batch}
         prompt = BATCH_PROMPT.format(price_note=price_note,
                                      securities=_format_batch(batch, quotes))
-        reply = provider.complete(SYSTEM_PROMPT, prompt)
-        return parse_batch_response(reply, tickers)
+        # One bad batch (provider hiccup, malformed reply) must not sink the
+        # whole run — the other batches are already paid for. Its tickers
+        # fall back to the honest "(no analysis returned)" rows below.
+        try:
+            reply = provider.complete(SYSTEM_PROMPT, prompt)
+            return parse_batch_response(reply, tickers)
+        except Exception as e:
+            batch_errors.append(e)
+            return {}
 
     analyses = {}
     with ThreadPoolExecutor(max_workers=rules["analysis"]["max_workers"]) as pool:
@@ -139,6 +157,12 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
             done_count += 1
             if on_progress:
                 on_progress(done_count, len(batches))
+
+    # If literally EVERY batch failed, something systemic is wrong (key,
+    # provider outage) — better a clear error than a run full of blanks.
+    if batch_errors and not analyses:
+        raise RuntimeError(
+            f"All {len(batches)} AI batches failed — first error: {batch_errors[0]}")
 
     # 3. Stitch prices + analysis together into one row per ticker.
     rows = []
@@ -153,9 +177,12 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
         }))
         rows.append(row)
 
-    # 4. Shortlist: highest conviction first, skipping risk-flagged products.
+    # 4. Shortlist: highest conviction first, skipping risk-flagged products
+    #    and anything whose own analysis says the BEAR side wins — a high
+    #    conviction score can't override the AI's own verdict.
     excluded = set(rules["portfolio"]["excluded_flags"])
-    eligible = [r for r in rows if not (set(r["flags"]) & excluded)]
+    eligible = [r for r in rows
+                if not (set(r["flags"]) & excluded) and r.get("verdict") == "bull"]
     eligible.sort(key=lambda r: r["conviction"], reverse=True)
     shortlist = [r["symbol"] for r in eligible[: rules["portfolio"]["shortlist_size"]]]
 
@@ -163,6 +190,7 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
         "run_at": datetime.now().isoformat(timespec="seconds"),
         "data_source": data_source,
         "scope": scope_name or "all watchlists",
+        "batches_failed": len(batch_errors),
         "shortlist": shortlist,
         "rows": rows,
     }
@@ -172,16 +200,36 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
 
 
 def _save(result, rows, shortlist):
-    """Save the result the web page reads (file or cloud database — see
-    storage.py) + the dated picks/ audit file."""
+    """Save everything one run produces:
+      - analysis_latest — what the web page shows (file or cloud database)
+      - analysis_history — one compact record per run EVER made: when, what
+        scope, and each pick with its conviction and entry price. This is
+        the raw material for a future track-record panel.
+      - picks/ — a dated audit file PER RUN. The file name includes the time
+        of day, so a second run on the same day gets its own file instead of
+        overwriting the first (the audit trail must keep every run).
+    """
     get_doc("analysis_latest").save(result)
+    by_symbol = {r["symbol"]: r for r in rows}
+
+    history_doc = get_doc("analysis_history")
+    history = history_doc.load() or []
+    history.append({
+        "run_at": result["run_at"],
+        "scope": result["scope"],
+        "data_source": result["data_source"],
+        "universe_size": len(rows),
+        "shortlist": [{"symbol": s,
+                       "conviction": by_symbol[s]["conviction"],
+                       "price": by_symbol[s]["price"]} for s in shortlist],
+    })
+    history_doc.save(history)
 
     PICKS_DIR.mkdir(exist_ok=True)
-    by_symbol = {r["symbol"]: r for r in rows}
     lines = [
-        f"# Picks — {date.today().isoformat()}",
+        f"# Picks — {result['run_at'].replace('T', ' ')}",
         "",
-        f"Data source: {result['data_source']}.",
+        f"Scope: {result['scope']}. Data source: {result['data_source']}.",
         "",
     ]
     for symbol in shortlist:
@@ -202,13 +250,20 @@ def _save(result, rows, shortlist):
             "",
         ]
     markdown = "\n".join(lines)
-    with open(PICKS_DIR / f"{date.today().isoformat()}.md", "w") as f:
+    # "2026-07-07T14:30:05" → "2026-07-07-143005", a file-name-safe stamp.
+    stamp = result["run_at"].replace("T", "-").replace(":", "")
+    path = PICKS_DIR / f"{stamp}.md"
+    suffix = 2
+    while path.exists():  # two runs in the same second — keep both anyway
+        path = PICKS_DIR / f"{stamp}-{suffix}.md"
+        suffix += 1
+    with open(path, "w") as f:
         f.write(markdown)
     # Also keep the audit trail in storage — on the cloud, the .md file
     # above lands on a disk that forgets, but the database doesn't.
     picks_doc = get_doc("picks")
     all_picks = picks_doc.load() or {}
-    all_picks[date.today().isoformat()] = markdown
+    all_picks[result["run_at"]] = markdown
     picks_doc.save(all_picks)
 
 

@@ -72,16 +72,22 @@ class PaperPortfolio:
             value += pos["shares"] * self.source.get_quote(symbol)["price"]
         return round(value, 2)
 
-    def snapshot(self):
-        """Record today's total value for the graph — one point per day
-        (calling it again the same day just updates that point)."""
+    def _update_history_point(self):
+        """Refresh today's total-value point in memory (no saving here).
+        Returns (value, new_day) — new_day is True the first time each day."""
         today = date.today().isoformat()
         value = self.total_value()
         history = self.state["history"]
         if history and history[-1]["date"] == today:
             history[-1]["total_value"] = value
-        else:
-            history.append({"date": today, "total_value": value})
+            return value, False
+        history.append({"date": today, "total_value": value})
+        return value, True
+
+    def snapshot(self):
+        """Record today's total value for the graph — one point per day
+        (calling it again the same day just updates that point)."""
+        value, _ = self._update_history_point()
         self._save()
         return value
 
@@ -113,14 +119,23 @@ class PaperPortfolio:
         }
         self._log_trade("buy", symbol, shares, price, reason)
 
-    def sync_to_shortlist(self, shortlist, why=None):
+    def sync_to_shortlist(self, shortlist, why=None, analyzed=None):
         """Make the portfolio mirror the shortlist (the 3 steps up top).
         Returns the list of trades made this sync.
 
         why — optional {symbol: reason text} from the analysis (conviction,
         bull case) so the trade log can explain each buy in plain English.
+
+        analyzed — optional list of symbols the run actually looked at.
+        When the analysis was scoped to ONE watchlist, holdings outside that
+        scope are left alone — the run said nothing about them, so "not on
+        the shortlist" is no reason to sell. (Without this, analysing a
+        3-stock list and syncing would liquidate the whole portfolio.)
+        Stop-loss discipline still applies to every holding. None means the
+        run covered everything.
         """
         why = why or {}
+        analyzed = set(analyzed) if analyzed is not None else None
         self._refresh()
         trades_before = len(self.state["trades"])
         excluded = set(self.rules["excluded_flags"])
@@ -131,7 +146,8 @@ class PaperPortfolio:
         for symbol in list(self.state["positions"].keys()):
             price = self.source.get_quote(symbol)["price"]
             pos = self.state["positions"][symbol]
-            if symbol not in shortlist:
+            in_scope = analyzed is None or symbol in analyzed
+            if in_scope and symbol not in shortlist:
                 self._sell(symbol, price,
                            "dropped off the shortlist — the latest analysis "
                            "no longer ranks it in the top picks")
@@ -172,7 +188,12 @@ class PaperPortfolio:
                 "pl_pct": round(pl / (pos["shares"] * pos["avg_cost"]) * 100, 2),
             })
 
-        total = self.snapshot()  # refresh today's graph point while we're here
+        # Refresh today's graph point, but only WRITE when a new day starts.
+        # summary() answers a page view — merely looking at the portfolio
+        # shouldn't rewrite the saved state on every reload.
+        total, new_day = self._update_history_point()
+        if new_day:
+            self._save()
         start = self.rules["starting_cash"]
         return {
             "cash": self.state["cash"],

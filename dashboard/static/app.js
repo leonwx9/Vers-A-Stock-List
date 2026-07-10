@@ -4,6 +4,26 @@
    3. The table can be filtered (search box) and sorted (click a header),
       and clicking any row or shortlist card opens that ticker's own page. */
 
+/* esc() makes text safe to drop into our HTML template strings by turning
+   the special characters into their harmless display forms ("<" → "&lt;").
+   Without it, a news headline or company name containing HTML would be
+   EXECUTED by the browser instead of displayed — the classic "XSS" attack.
+   Rule of thumb: every ${...} that isn't a number we computed ourselves
+   goes through esc(). (Same helper lives in ticker.js — each page's script
+   is deliberately self-contained.) */
+function esc(text) {
+  return String(text ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+/* Links that came from outside (news articles, SEC filings) go through
+   safeUrl(): only real web addresses pass; anything else (for example a
+   "javascript:" URL, which would run code when clicked) becomes "#". */
+function safeUrl(url) {
+  return /^https?:\/\//i.test(url || "") ? url : "#";
+}
+
 const statusLine = document.getElementById("analysis-status");
 const runButton = document.getElementById("run-analysis-btn");
 
@@ -55,7 +75,7 @@ function fillScopeOptions() {
   const saved = localStorage.getItem("analyze-scope") || "all";
   scopeSelect.innerHTML = `<option value="all">All watchlists</option>` +
     wlData.watchlists.map((w) =>
-      `<option value="${w.id}">${w.name}</option>`).join("");
+      `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("");
   // Keep the previous choice if that list still exists.
   scopeSelect.value =
     [...scopeSelect.options].some((o) => o.value === saved) ? saved : "all";
@@ -123,15 +143,15 @@ function renderShortlist(data) {
   const cards = data.shortlist.map((symbol) => {
     const r = bySymbol[symbol];
     return `
-      <div class="pick-card" data-symbol="${r.symbol}">
+      <div class="pick-card" data-symbol="${esc(r.symbol)}">
         <div class="pick-head">
-          <span class="pick-symbol">${r.symbol}</span>
+          <span class="pick-symbol">${esc(r.symbol)}</span>
           <span class="score-badge">${r.conviction}/10</span>
         </div>
-        <div class="pick-name">${r.name}</div>
-        <div class="pick-detail"><strong>Bull:</strong> ${r.bull}</div>
-        <div class="pick-detail"><strong>Bear:</strong> ${r.bear}</div>
-        <div class="pick-meta">$${r.price} · ${r.timeframe} · ${r.stop_loss}</div>
+        <div class="pick-name">${esc(r.name)}</div>
+        <div class="pick-detail"><strong>Bull:</strong> ${esc(r.bull)}</div>
+        <div class="pick-detail"><strong>Bear:</strong> ${esc(r.bear)}</div>
+        <div class="pick-meta">$${r.price} · ${esc(r.timeframe)} · ${esc(r.stop_loss)}</div>
       </div>`;
   });
   const box = document.getElementById("shortlist");
@@ -174,15 +194,15 @@ function renderTable() {
 
   const body = rows
     .map((r) => {
-      const flags = r.flags.map((f) => `<span class="flag-tag">${f}</span>`).join("");
+      const flags = r.flags.map((f) => `<span class="flag-tag">${esc(f)}</span>`).join("");
       const chg = rowChange(r);
       const changeCell = chg === null
         ? `<td class="hint">—</td>`
         : `<td class="${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "+" : ""}${chg}%</td>`;
       return `
-      <tr class="main-row" data-symbol="${r.symbol}">
-        <td><strong>${r.symbol}</strong>${flags}</td>
-        <td class="col-name">${r.name}</td>
+      <tr class="main-row" data-symbol="${esc(r.symbol)}">
+        <td><strong>${esc(r.symbol)}</strong>${flags}</td>
+        <td class="col-name">${esc(r.name)}</td>
         <td>$${r.price}</td>
         ${changeCell}
         <td>
@@ -198,15 +218,15 @@ function renderTable() {
 
   document.getElementById("analysis-table").innerHTML = `
     <div class="panel-header" style="margin-top:1rem">
-      <h3 class="subheading">${chosen ? chosen.name : "All"} — ${rows.length} tickers <span class="hint">(click a row to open its page)</span></h3>
+      <h3 class="subheading">${chosen ? esc(chosen.name) : "All"} — ${rows.length} tickers <span class="hint">(click a row to open its page)</span></h3>
       <div class="btn-row">
         <select id="wl-table-filter" class="range-select" title="Show one watchlist only">
           <option value="all">All watchlists</option>
           ${wlData.watchlists.map((w) =>
-            `<option value="${w.id}" ${w.id === wlFilter ? "selected" : ""}>${w.name}</option>`).join("")}
+            `<option value="${esc(w.id)}" ${w.id === wlFilter ? "selected" : ""}>${esc(w.name)}</option>`).join("")}
         </select>
         <input id="filter-input" class="filter-input" type="search"
-               placeholder="Filter by ticker or name…" value="${filterText}">
+               placeholder="Filter by ticker or name…" value="${esc(filterText)}">
         <button id="toggle-table" class="mini-btn">Hide</button>
       </div>
     </div>
@@ -358,10 +378,10 @@ function renderTrades(trades) {
   // Newest first, like a message log.
   const items = [...trades].reverse().map((t) => `
     <div class="trade-item">
-      <span class="trade-when">${t.at.replace("T", " ")}</span>
-      <span class="trade-badge ${t.action}">${t.action.toUpperCase()}</span>
-      <span class="trade-what">${t.shares} × ${t.symbol} @ $${t.price}</span>
-      <span class="trade-why">${t.reason}</span>
+      <span class="trade-when">${esc(t.at.replace("T", " "))}</span>
+      <span class="trade-badge ${esc(t.action)}">${esc(t.action.toUpperCase())}</span>
+      <span class="trade-what">${t.shares} × ${esc(t.symbol)} @ $${t.price}</span>
+      <span class="trade-why">${esc(t.reason)}</span>
     </div>`).join("");
 
   box.innerHTML = head + `<div class="trade-log">${items}</div>`;
@@ -438,8 +458,8 @@ function renderHoldings(holdings) {
   }
 
   const rows = holdings.map((h) => `
-    <tr class="main-row" data-symbol="${h.symbol}">
-      <td><strong>${h.symbol}</strong></td>
+    <tr class="main-row" data-symbol="${esc(h.symbol)}">
+      <td><strong>${esc(h.symbol)}</strong></td>
       <td>${h.shares}</td>
       <td>$${h.avg_cost}</td>
       <td>$${h.price}</td>
@@ -521,28 +541,28 @@ function renderWatchlists() {
     const rows = wl.symbols.map((s) => {
       const info = wlData.stocks[s] || {};
       const flags = (info.flags || [])
-        .map((f) => `<span class="flag-tag">${f}</span>`).join("");
+        .map((f) => `<span class="flag-tag">${esc(f)}</span>`).join("");
       return `
-        <tr class="main-row" data-symbol="${s}">
-          <td><strong>${s}</strong>${flags}</td>
-          <td class="col-name">${info.name || s}</td>
+        <tr class="main-row" data-symbol="${esc(s)}">
+          <td><strong>${esc(s)}</strong>${flags}</td>
+          <td class="col-name">${esc(info.name || s)}</td>
           <td>${priceCell(s)}</td>
-          <td class="row-x"><button class="chip-x" data-list="${wl.id}"
-              data-symbol="${s}" title="Remove from ${wl.name}">×</button></td>
+          <td class="row-x"><button class="chip-x" data-list="${esc(wl.id)}"
+              data-symbol="${esc(s)}" title="Remove from ${esc(wl.name)}">×</button></td>
         </tr>`;
     }).join("");
 
     return `
-      <div class="wl-card" data-id="${wl.id}">
+      <div class="wl-card" data-id="${esc(wl.id)}">
         <div class="wl-head">
           <button class="wl-chev" title="${collapsed ? "Show" : "Hide"} this list">
             ${collapsed ? "▸" : "▾"}</button>
           <span class="wl-dot-wrap">
-            <button class="wl-dot" style="background:${wl.tag.value}"
+            <button class="wl-dot" style="background:${esc(wl.tag.value)}"
                     title="Change colour"></button>
             <span class="color-pop" hidden>${swatches}</span>
           </span>
-          <span class="wl-name">${wl.name}</span>
+          <span class="wl-name">${esc(wl.name)}</span>
           <span class="hint">(${wl.count})</span>
           <span class="wl-spacer"></span>
           <button class="mini-btn wl-rename">Rename</button>
@@ -649,7 +669,7 @@ function wireListSearch(card, wl) {
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       if (data.status !== "ok") {
-        drop.innerHTML = `<div class="search-row hint">⚠ ${data.message}</div>`;
+        drop.innerHTML = `<div class="search-row hint">⚠ ${esc(data.message)}</div>`;
       } else if (!data.results.length) {
         drop.innerHTML = `<div class="search-row hint">No US-listed matches.</div>`;
       } else {
@@ -657,9 +677,9 @@ function wireListSearch(card, wl) {
           const already = wl.symbols.includes(r.symbol);
           return `
             <div class="search-row add-row ${already ? "muted" : ""}"
-                 data-symbol="${r.symbol}" data-name="${r.name}" data-type="${r.type}">
-              <span class="search-main"><strong>${r.symbol}</strong> ${r.name}
-                <span class="flag-tag">${r.exchange}</span></span>
+                 data-symbol="${esc(r.symbol)}" data-name="${esc(r.name)}" data-type="${esc(r.type)}">
+              <span class="search-main"><strong>${esc(r.symbol)}</strong> ${esc(r.name)}
+                <span class="flag-tag">${esc(r.exchange)}</span></span>
               <span class="hint">${already ? "already in list" : "+ add"}</span>
             </div>`;
         }).join("");
@@ -716,25 +736,25 @@ async function runSearch(q) {
   const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
   const data = await res.json();
   if (data.status !== "ok") {
-    searchResults.innerHTML = `<div class="search-row hint">⚠ ${data.message}</div>`;
+    searchResults.innerHTML = `<div class="search-row hint">⚠ ${esc(data.message)}</div>`;
     searchResults.hidden = false;
     return;
   }
   if (!data.results.length) {
     searchResults.innerHTML =
-      `<div class="search-row hint">No US-listed matches for “${q}”.</div>`;
+      `<div class="search-row hint">No US-listed matches for “${esc(q)}”.</div>`;
     searchResults.hidden = false;
     return;
   }
 
   const listOptions = wlData.watchlists
-    .map((wl) => `<option value="${wl.id}">${wl.name}</option>`).join("");
+    .map((wl) => `<option value="${esc(wl.id)}">${esc(wl.name)}</option>`).join("");
   searchResults.innerHTML = data.results.map((r) => `
-    <div class="search-row" data-symbol="${r.symbol}" data-name="${r.name}"
-         data-type="${r.type}">
+    <div class="search-row" data-symbol="${esc(r.symbol)}" data-name="${esc(r.name)}"
+         data-type="${esc(r.type)}">
       <span class="search-main">
-        <strong>${r.symbol}</strong> ${r.name}
-        <span class="flag-tag">${r.exchange}</span>
+        <strong>${esc(r.symbol)}</strong> ${esc(r.name)}
+        <span class="flag-tag">${esc(r.exchange)}</span>
       </span>
       <select class="range-select add-select" title="Add to a watchlist">
         <option value="">+ Add…</option>${listOptions}
@@ -845,20 +865,20 @@ function renderScanner(data) {
     <div class="scan-card">
       <div class="scan-head">
         <div>
-          <span class="pick-symbol">${h.company}</span>
-          ${h.ticker ? `<span class="flag-tag">${h.ticker}</span>` : ""}
-          <div class="pick-name">${h.industry} · ${h.form} filed ${h.file_date}</div>
+          <span class="pick-symbol">${esc(h.company)}</span>
+          ${h.ticker ? `<span class="flag-tag">${esc(h.ticker)}</span>` : ""}
+          <div class="pick-name">${esc(h.industry)} · ${esc(h.form)} filed ${esc(h.file_date)}</div>
         </div>
         <span class="hype-badge" title="10 = pure hype, 1 = real substance">
           hype ${h.hype_score}/10</span>
       </div>
-      <p><strong>What they announced:</strong> ${h.what_they_announced}</p>
-      <p><strong>Announced vs executed:</strong> ${h.announced_vs_executed}</p>
-      <p><strong>Can they fund it:</strong> ${h.funding_ability}</p>
+      <p><strong>What they announced:</strong> ${esc(h.what_they_announced)}</p>
+      <p><strong>Announced vs executed:</strong> ${esc(h.announced_vs_executed)}</p>
+      <p><strong>Can they fund it:</strong> ${esc(h.funding_ability)}</p>
       <div class="dd-block"><strong>Red flags</strong>
-        <ul>${h.red_flags.map((r) => `<li>${r}</li>`).join("")}</ul></div>
-      <p class="scan-bottom">${h.bottom_line}</p>
-      <a class="filing-link" href="${h.filing_url}" target="_blank" rel="noopener">
+        <ul>${h.red_flags.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>
+      <p class="scan-bottom">${esc(h.bottom_line)}</p>
+      <a class="filing-link" href="${esc(safeUrl(h.filing_url))}" target="_blank" rel="noopener">
         View the filing on SEC EDGAR →</a>
     </div>`).join("");
 
@@ -868,7 +888,7 @@ function renderScanner(data) {
     ? `<details class="excluded-list">
          <summary>${data.excluded.length} filings examined but excluded</summary>
          <ul>${data.excluded.map((e) =>
-           `<li><strong>${e.company}</strong> — ${e.reason}</li>`).join("")}</ul>
+           `<li><strong>${esc(e.company)}</strong> — ${esc(e.reason)}</li>`).join("")}</ul>
        </details>`
     : "";
 

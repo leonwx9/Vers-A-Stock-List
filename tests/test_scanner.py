@@ -4,7 +4,8 @@ so everything runs offline with no keys and no SEC traffic."""
 import json
 
 from dashboard.scanner.edgar import extract_ai_excerpts, is_tech_company
-from dashboard.scanner.pivot_scanner import parse_analysis_response, run_scan
+from dashboard.scanner.pivot_scanner import (_cap_text, parse_analysis_response,
+                                             run_scan)
 
 # ── The pure helpers ──────────────────────────────────────────────────────
 
@@ -34,6 +35,12 @@ def test_tech_filter_uses_owner_org_and_sic():
 def test_analysis_parser_clamps_hype_score():
     reply = json.dumps({"qualifies": True, "hype_score": 42})
     assert parse_analysis_response(reply)["hype_score"] == 10
+
+
+def test_cap_text_formats_market_caps_for_the_prompt():
+    assert _cap_text(1_000_000_000) == "$1B"
+    assert _cap_text(2_500_000_000) == "$2.5B"
+    assert _cap_text(500_000_000) == "$500M"
 
 
 # ── The full scan, wired with fakes ──────────────────────────────────────
@@ -121,3 +128,18 @@ def test_scan_puts_non_qualifiers_in_excluded(tmp_path, monkeypatch):
     assert result["hits"] == []
     reasons = [e["reason"] for e in result["excluded"]]
     assert "routine AI-tool mention" in reasons
+
+
+def test_scan_prompt_uses_the_configured_market_cap(tmp_path, monkeypatch):
+    import dashboard.storage as storage
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
+
+    class CapturingProvider(FakeProvider):
+        def complete(self, system, user, max_tokens=4000):
+            self.last_prompt = user
+            return super().complete(system, user, max_tokens)
+
+    provider = CapturingProvider()
+    run_scan(provider, FakeEdgar(), rules=RULES)
+    # RULES sets max_market_cap to 1 billion → the prompt must say ~$1B.
+    assert "under ~$1B" in provider.last_prompt

@@ -51,6 +51,7 @@ never reach GitHub.
 | `OPENROUTER_MODEL` / `ANTHROPIC_MODEL` | which Claude model (already set) |
 | `DASHBOARD_PASSWORD` | set = every page needs a password (cloud); empty = open (local) |
 | `FLASK_SECRET_KEY` | keeps you logged in across restarts (any long random string) |
+| `DASHBOARD_DEBUG` | `1` = auto-reload on code edits + rich error pages, but reachable from THIS Mac only (the debugger can run code, so it must never face the network). Empty = normal mode, phone can connect |
 | `SEC_EDGAR_CONTACT` | optional "Name email" our EDGAR requests identify as |
 | `DATABASE_URL` | optional free cloud Postgres — set it and saved data (watchlists, portfolio…) lives there instead of local files, so the cloud copy survives restarts |
 
@@ -85,7 +86,8 @@ never reach GitHub.
 
 ## Tests
 
-53 automated tests, all offline (external services are faked):
+A suite of automated tests (70 and growing), all offline — external
+services are faked:
 
 ```bash
 ./venv/bin/python -m pytest tests/
@@ -107,7 +109,7 @@ dashboard/
   static/              CSS, JS, icons, vendored chart library
   templates/           the HTML pages
   data/                saved runs & portfolio state (gitignored)
-picks/                 dated audit file per analysis run (committed)
+picks/                 timestamped audit file per analysis run (committed)
 tests/                 pytest suite — fakes, no network
 render.yaml            cloud deployment blueprint (Render.com)
 PROGRESS.md            milestone-by-milestone build history

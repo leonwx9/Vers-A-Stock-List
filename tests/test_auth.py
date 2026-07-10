@@ -48,3 +48,9 @@ def test_logout_locks_the_door_again(client, monkeypatch):
     client.post("/login", data={"password": "hunter2"})
     client.get("/logout")
     assert client.get("/").status_code == 302
+
+
+def test_session_cookie_blocks_cross_site_requests():
+    # SameSite=Lax stops other websites firing authenticated POSTs at our
+    # API with the visitor's login cookie ("cross-site request forgery").
+    assert app.config["SESSION_COOKIE_SAMESITE"] == "Lax"

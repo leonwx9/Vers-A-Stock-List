@@ -138,9 +138,42 @@
     WHY in plain English (buys carry the pick's conviction + bull case;
     sells explain shortlist-drop or stop-loss with numbers).
 
+- **Second-opinion review round** (2026-07-08): a fresh-eyes audit of the
+  whole project found and fixed, with Leon's approval:
+  - *Deep dive trusted live prices* — the prompt permanently said
+    "simulated prices" (a leftover from before M6), making the AI distrust
+    real market data. Now live/sample is stated honestly, like the searcher.
+  - *Audit trail kept every run* — picks/ files were named by date only, so
+    a same-day re-run overwrote the earlier one. Files are now timestamped
+    per run, and a new `analysis_history` document records every run's
+    scope + picks + entry prices (the seed for a future track-record panel).
+  - *Scoped-sync trap* — syncing after a one-watchlist analysis used to
+    sell EVERYTHING outside that list. Sync now only trades within what the
+    run actually analysed (stop-loss still applies to all holdings).
+  - *Security*: HTML-escaping in the browser code (news headlines, AI text
+    and stock names can no longer inject scripts — "XSS"); session cookie
+    marked SameSite=Lax (blocks cross-site forged requests); 1-second pause
+    per wrong password (blunts brute-forcing); Flask's debugger now only
+    runs bound to this Mac (DASHBOARD_DEBUG=1), never network-visible.
+  - *Robustness*: one failed AI batch no longer sinks a whole run (and a
+    junk conviction value no longer crashes parsing); a "bear" verdict can
+    no longer be shortlisted on a high conviction score; only one paid
+    run/scan at a time (second press gets "already running"); file saves
+    are atomic (a crash mid-write can't corrupt saved data); viewing the
+    portfolio no longer rewrites its file on every reload; EDGAR retries
+    timeouts too.
+  - *Housekeeping*: dead config keys removed (whole_shares_only,
+    history_days), scanner market-cap ceiling actually wired to rules.yaml,
+    all dependency versions pinned. Tests: 56 → 70, all offline.
+  - Deliberately NOT changed (flagged for a future decision): the batch
+    analysis still reasons mostly from momentum numbers — feeding real
+    headlines into it is a feature choice for Leon, not a bug fix.
+
 ## Next
 - Leon: create the free Neon database and paste DATABASE_URL into Render.
 - Phase 2 proper: scheduled runs + track-record panel (+ email?).
+- Decide: feed news headlines into the batch analysis so bull/bear cases
+  rest on more than momentum (costs a bit more per run).
 
 ## How to run
 ```

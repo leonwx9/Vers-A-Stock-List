@@ -28,9 +28,11 @@ You respond ONLY with a JSON object — no prose before or after it."""
 DEEP_DIVE_PROMPT = """\
 Produce an in-depth rating explanation for {symbol} ({name}), a {type}{flags_note}.
 
-Context from the latest quick screen (simulated prices — treat the trend only
-as illustrative momentum): price ${price}, 5-day {change_5d_pct:+}%,
-30-day {change_30d_pct:+}%, conviction score {conviction}/10.
+Context from the latest quick screen: price ${price},
+5-day {change_5d_pct:+}%, 30-day {change_30d_pct:+}%,
+conviction score {conviction}/10.
+
+{price_note}
 
 Recent real news headlines fetched just now:
 {headlines_block}
@@ -42,7 +44,6 @@ Rules for honesty:
   unavailable right now — do not invent articles.
 - FUNDAMENTALS come from your general knowledge of the company, which may be
   months out of date — say so where it matters.
-- Do not mention the simulated prices as if they were real market data.
 
 Return ONE JSON object with exactly these keys:
   "overview":         2-3 plain-English sentences: what this company/fund
@@ -82,8 +83,26 @@ def parse_deep_dive_response(text):
     return json.loads(cleaned[start : end + 1])
 
 
-def run_deep_dive(provider, asset, quote, headlines, conviction):
-    """Generate, cache and return the deep dive for one asset."""
+# Tell the AI honestly what kind of prices it's looking at — same idea as
+# searcher.py. Before this note existed, the prompt permanently said
+# "simulated", which made the AI distrust REAL prices once live data landed.
+PRICE_NOTES = {
+    "live": "The price figures are REAL recent market data (daily closes).",
+    "sample": ("Important: the price figures are SIMULATED development data, "
+               "not real market prices. Treat the trend only as illustrative "
+               "momentum and never mention these prices as if they were real "
+               "market data."),
+}
+
+
+def run_deep_dive(provider, asset, quote, headlines, conviction,
+                  data_source="sample"):
+    """Generate, cache and return the deep dive for one asset.
+
+    data_source — "live" or "sample" (from rules.yaml), so the prompt can
+    tell the AI truthfully whether the prices are real. Defaults to the
+    cautious option: treating prices as simulated.
+    """
     if headlines:
         headlines_block = "\n".join(
             f'- "{h["title"]}" ({h["source"]}, {h["published"]})'
@@ -102,6 +121,7 @@ def run_deep_dive(provider, asset, quote, headlines, conviction):
         flags_note=flags_note, price=quote["price"],
         change_5d_pct=quote["change_5d_pct"], change_30d_pct=quote["change_30d_pct"],
         conviction=conviction, headlines_block=headlines_block,
+        price_note=PRICE_NOTES.get(data_source, PRICE_NOTES["sample"]),
     )
 
     reply = provider.complete(SYSTEM_PROMPT, prompt, max_tokens=2000)

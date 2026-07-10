@@ -2,6 +2,23 @@
    Loads everything from /api/ticker/<symbol>, draws the chart (line or
    candles), the stats grid, the news list, and the plain-English deep dive. */
 
+/* esc() makes text safe to drop into our HTML template strings by turning
+   the special characters into their harmless display forms ("<" → "&lt;").
+   Without it, a news headline or AI sentence containing HTML would be
+   EXECUTED by the browser instead of displayed — the classic "XSS" attack.
+   (Same helper lives in app.js — each page's script is self-contained.) */
+function esc(text) {
+  return String(text ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+/* Links from outside (news articles) go through safeUrl(): only real web
+   addresses pass; anything else (e.g. "javascript:...") becomes "#". */
+function safeUrl(url) {
+  return /^https?:\/\//i.test(url || "") ? url : "#";
+}
+
 let pageData = null;      // everything the API sent us
 let chart = null;         // the LightweightCharts chart object
 let series = null;        // the line/candle series currently on the chart
@@ -54,8 +71,8 @@ async function renderMembership() {
 
   box.innerHTML = data.watchlists.map((wl) => `
     <label class="wl-check ${inLists.has(wl.id) ? "on" : ""}">
-      <input type="checkbox" data-id="${wl.id}" ${inLists.has(wl.id) ? "checked" : ""}>
-      <span class="wl-dot-mini" style="background:${wl.tag.value}"></span>${wl.name}
+      <input type="checkbox" data-id="${esc(wl.id)}" ${inLists.has(wl.id) ? "checked" : ""}>
+      <span class="wl-dot-mini" style="background:${esc(wl.tag.value)}"></span>${esc(wl.name)}
     </label>`).join("");
 
   box.querySelectorAll("input").forEach((cb) =>
@@ -179,9 +196,9 @@ function renderNews() {
   }
   box.innerHTML = items
     .map((n) => `
-      <a class="news-item" href="${n.link}" target="_blank" rel="noopener">
-        <span class="news-title">${n.title}</span>
-        <span class="news-meta">${n.source}${n.published ? " · " + n.published.slice(0, 16) : ""}</span>
+      <a class="news-item" href="${esc(safeUrl(n.link))}" target="_blank" rel="noopener">
+        <span class="news-title">${esc(n.title)}</span>
+        <span class="news-meta">${esc(n.source)}${n.published ? " · " + esc(n.published.slice(0, 16)) : ""}</span>
       </a>`)
     .join("");
 }
@@ -216,12 +233,12 @@ function scoreRow(label, part) {
     <div class="score-row">
       <div class="score-row-head">
         <span class="score-row-label">${label}</span>
-        <span class="score-row-num">${part.score}/10</span>
+        <span class="score-row-num">${esc(part.score)}/10</span>
       </div>
       <div class="score-bar"><div class="score-bar-fill" style="width:${part.score * 10}%"></div></div>
-      <p class="score-row-text">${part.explanation}</p>
+      <p class="score-row-text">${esc(part.explanation)}</p>
       ${(part.evidence || [])
-        .map((e) => `<p class="evidence">“${e.headline}” — ${e.takeaway}</p>`)
+        .map((e) => `<p class="evidence">“${esc(e.headline)}” — ${esc(e.takeaway)}</p>`)
         .join("")}
     </div>`;
 }
@@ -238,17 +255,17 @@ function renderDeepDive(dd) {
   const screen = pageData.screen;
   box.innerHTML = `
     ${screen ? `<p class="dd-conviction">Quick-screen conviction:
-      <span class="score-badge">${screen.conviction}/10</span> · verdict: ${screen.verdict}</p>` : ""}
-    <p class="dd-overview">${dd.overview}</p>
-    <p><strong>Why this score:</strong> ${dd.rating_rationale}</p>
+      <span class="score-badge">${screen.conviction}/10</span> · verdict: ${esc(screen.verdict)}</p>` : ""}
+    <p class="dd-overview">${esc(dd.overview)}</p>
+    <p><strong>Why this score:</strong> ${esc(dd.rating_rationale)}</p>
     ${scoreRow("Technical", dd.technical)}
     ${scoreRow("Sentiment", dd.sentiment)}
     ${scoreRow("Fundamentals", dd.fundamentals)}
     <div class="dd-block"><strong>Main risks</strong>
-      <ul>${dd.risks.map((r) => `<li>${r}</li>`).join("")}</ul></div>
+      <ul>${dd.risks.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>
     <div class="dd-block"><strong>What would change this rating:</strong>
-      ${dd.what_would_change}</div>
-    <p class="fine-print">Generated ${dd.generated_at.replace("T", " ")}.
+      ${esc(dd.what_would_change)}</div>
+    <p class="fine-print">Generated ${esc(dd.generated_at.replace("T", " "))}.
       Fundamentals come from the AI's general knowledge and may be a few
       months out of date.</p>`;
 }

@@ -6,7 +6,6 @@ from dashboard.portfolio.engine import PaperPortfolio
 
 RULES = {"portfolio": {
     "starting_cash": 10000,
-    "whole_shares_only": True,
     "max_position_value": 800,
     "excluded_flags": ["leveraged", "inverse", "volatility"],
     "shortlist_size": 5,
@@ -99,3 +98,39 @@ def test_summary_has_everything_the_page_needs(tmp_path):
     h = s["holdings"][0]
     for field in ("symbol", "shares", "avg_cost", "price", "value", "pl", "pl_pct"):
         assert field in h
+
+
+def test_scoped_sync_leaves_unanalyzed_holdings_alone(tmp_path):
+    # A run scoped to one watchlist says NOTHING about other holdings —
+    # they must not be sold for "missing" a shortlist that never
+    # considered them.
+    pf = make_portfolio(tmp_path)
+    pf.sync_to_shortlist(["AAPL", "KO"])                      # full run
+    trades = pf.sync_to_shortlist(["MSFT"], analyzed=["MSFT", "NVDA"])
+
+    assert "AAPL" in pf.state["positions"]   # out of scope → untouched
+    assert "KO" in pf.state["positions"]     # out of scope → untouched
+    assert "MSFT" in pf.state["positions"]   # in scope + shortlisted → bought
+    assert all(t["symbol"] == "MSFT" for t in trades)
+
+
+def test_scoped_sync_still_sells_an_in_scope_drop(tmp_path):
+    pf = make_portfolio(tmp_path)
+    pf.sync_to_shortlist(["AAPL", "KO"])
+    # Scoped run DID analyse AAPL and left it off the shortlist → sell it.
+    pf.sync_to_shortlist(["MSFT"], analyzed=["MSFT", "AAPL"])
+    assert "AAPL" not in pf.state["positions"]
+    assert "KO" in pf.state["positions"]     # still out of scope → kept
+
+
+def test_viewing_the_summary_saves_at_most_once_a_day(tmp_path):
+    # summary() answers a page view — looking at the portfolio shouldn't
+    # rewrite the saved file on every reload, only when a new day's graph
+    # point appears.
+    pf = make_portfolio(tmp_path)
+    saves = []
+    pf._save = lambda: saves.append(1)
+    pf.summary()   # first view today → adds today's point → one save
+    pf.summary()   # second view → same point updated in memory → no save
+    pf.summary()
+    assert len(saves) == 1

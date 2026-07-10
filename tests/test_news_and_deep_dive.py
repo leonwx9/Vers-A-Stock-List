@@ -78,3 +78,31 @@ def test_run_deep_dive_saves_cache(tmp_path, monkeypatch):
     assert "generated_at" in result
     # The slash in BRK/B must be made file-safe.
     assert (tmp_path / "deepdive_BRK-B.json").exists()
+
+
+class PromptCapturingProvider(FakeProvider):
+    """Remembers the prompt it was sent, so tests can inspect it."""
+
+    def complete(self, system, user, max_tokens=4000):
+        self.last_prompt = user
+        return super().complete(system, user, max_tokens)
+
+
+def test_deep_dive_tells_the_ai_when_prices_are_real(tmp_path, monkeypatch):
+    # Regression test: after live prices landed, the deep-dive prompt kept
+    # calling them "simulated", making the AI distrust real market data.
+    import dashboard.storage as storage
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
+
+    asset = {"symbol": "AAPL", "name": "Apple", "type": "stock", "flags": []}
+    quote = {"price": 230.0, "change_5d_pct": 1.2, "change_30d_pct": 3.4}
+
+    provider = PromptCapturingProvider()
+    run_deep_dive(provider, asset, quote, headlines=[], conviction=7,
+                  data_source="live")
+    assert "REAL recent market data" in provider.last_prompt
+    assert "SIMULATED" not in provider.last_prompt
+
+    run_deep_dive(provider, asset, quote, headlines=[], conviction=7,
+                  data_source="sample")
+    assert "SIMULATED" in provider.last_prompt

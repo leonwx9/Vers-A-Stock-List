@@ -55,7 +55,7 @@ that mention AI:
 {excerpts}
 
 First decide whether this QUALIFIES as what we're scanning for — ALL three:
-  a) plausibly a SMALL company (market cap under ~$1B — judge from your
+  a) plausibly a SMALL company (market cap under ~{max_cap} — judge from your
      general knowledge; if genuinely unsure, qualify it and say so),
   b) NOT primarily a technology company,
   c) a NEWLY DISCLOSED pivot/expansion INTO AI-related business — not
@@ -79,6 +79,14 @@ Return ONE JSON object with exactly these keys:
   "hype_score":           integer 1-10 — 10 means pure hype, 1 means real
                           substance
   "bottom_line":          one skeptical plain-English sentence"""
+
+
+def _cap_text(dollars):
+    """Turn the rules.yaml market-cap ceiling into prompt-friendly text:
+    1000000000 → "$1B", 500000000 → "$500M"."""
+    if dollars >= 1_000_000_000:
+        return f"${dollars / 1_000_000_000:g}B"
+    return f"${dollars / 1_000_000:g}M"
 
 
 def parse_analysis_response(text):
@@ -163,6 +171,7 @@ def run_scan(provider, edgar, rules=None, on_progress=None):
             sic_description=info["sic_description"] or "unknown",
             form=cand["form"], file_date=cand["file_date"],
             excerpts=cand["excerpts"] or "(the filing text could not be fetched)",
+            max_cap=_cap_text(rules["scanner"]["max_market_cap"]),
         )
         try:
             return parse_analysis_response(

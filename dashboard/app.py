@@ -21,6 +21,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import hmac
 import os
 import secrets
+import threading
+import time
 from datetime import timedelta
 
 from dotenv import load_dotenv
@@ -53,6 +55,11 @@ app.permanent_session_lifetime = timedelta(days=30)
 # login cookie HTTPS-only so it can never leak over plain HTTP.
 app.config["SESSION_COOKIE_SECURE"] = bool(os.getenv("RENDER"))
 app.config["SESSION_COOKIE_HTTPONLY"] = True
+# SameSite=Lax tells browsers: don't attach this cookie to requests that
+# OTHER websites start (defeats "cross-site request forgery" — a malicious
+# page you happen to visit firing POSTs at our API with your login cookie).
+# Chrome assumes Lax when unset, but Safari doesn't — so say it explicitly.
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 
 @app.before_request
@@ -80,6 +87,11 @@ def login():
             session.permanent = True
             session["authed"] = True
             return redirect(url_for("home"))
+        # A one-second pause per wrong guess makes brute-forcing the
+        # password (millions of rapid guesses) impractical, while a human
+        # who mistyped barely notices. Skipped in tests to keep them fast.
+        if not app.config.get("TESTING"):
+            time.sleep(1)
         error = "Wrong password."
     return render_template("login.html", error=error)
 
@@ -100,6 +112,14 @@ news = GoogleNewsSource()
 watchlists = WatchlistStore()
 portfolio = PaperPortfolio(prices, flags_source=watchlists.flags_by_symbol)
 edgar = EdgarClient()
+
+# One paid run at a time. A Lock is a turnstile: the first request through
+# holds it until done; anyone else gets a clear "already running" answer
+# instead of silently starting a second run (= double AI spend). The Run
+# button is disabled in the browser too, but a second tab or the phone
+# wouldn't know about that.
+analysis_lock = threading.Lock()
+scan_lock = threading.Lock()
 
 
 def find_asset(symbol):
@@ -194,11 +214,17 @@ def api_run_analysis():
                         "message": "No stocks to analyse — add some to a "
                                    "watchlist first."}), 400
 
+    if not analysis_lock.acquire(blocking=False):
+        return jsonify({"status": "error",
+                        "message": "An analysis is already running — wait "
+                                   "for it to finish."}), 409
     try:
         result = searcher.run_analysis(provider, prices, universe=universe,
                                        scope_name=scope_name)
     except Exception as e:
         return jsonify({"status": "error", "message": f"Analysis failed: {e}"}), 500
+    finally:
+        analysis_lock.release()
 
     return jsonify({"status": "ok", **result})
 
@@ -221,10 +247,16 @@ def api_scan():
     except MissingKeyError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
 
+    if not scan_lock.acquire(blocking=False):
+        return jsonify({"status": "error",
+                        "message": "A scan is already running — wait for it "
+                                   "to finish."}), 409
     try:
         result = pivot_scanner.run_scan(provider, edgar)
     except Exception as e:
         return jsonify({"status": "error", "message": f"Scan failed: {e}"}), 500
+    finally:
+        scan_lock.release()
 
     return jsonify({"status": "ok", **result})
 
@@ -248,7 +280,13 @@ def api_portfolio_sync():
     why = {r["symbol"]: f"on the shortlist — conviction {r['conviction']}/10; "
                         f"bull case: {r['bull']}"
            for r in latest["rows"] if r["symbol"] in latest["shortlist"]}
-    trades = portfolio.sync_to_shortlist(latest["shortlist"], why=why)
+    # If the run was scoped to ONE watchlist, tell the engine which symbols
+    # it actually analysed — holdings outside that scope must be left alone,
+    # not sold for "missing" a shortlist they were never considered for.
+    scoped = latest.get("scope", "all watchlists") != "all watchlists"
+    analyzed = [r["symbol"] for r in latest["rows"]] if scoped else None
+    trades = portfolio.sync_to_shortlist(latest["shortlist"], why=why,
+                                         analyzed=analyzed)
     return jsonify({"status": "ok", "trades_made": trades, **portfolio.summary()})
 
 
@@ -387,6 +425,7 @@ def api_deep_dive(symbol):
             prices.get_quote(symbol),
             news.get_headlines(symbol, asset["name"]),
             conviction,
+            data_source=PRICE_SOURCE_NAME,
         )
     except Exception as e:
         return jsonify({"status": "error", "message": f"Deep dive failed: {e}"}), 500
@@ -395,10 +434,17 @@ def api_deep_dive(symbol):
 
 
 if __name__ == "__main__":
-    # debug=True auto-reloads on code edits and shows helpful error pages —
-    # fine because this server is local-only. Port 5001 avoids clashing with
-    # macOS's own service on port 5000.
-    # host="0.0.0.0" makes the dashboard reachable from Leon's OTHER devices
-    # (phone via Tailscale or home Wi-Fi) — not just this Mac. It is still
-    # private: nothing on the public internet can reach a home machine.
-    app.run(debug=True, host="0.0.0.0", port=5001)
+    # Port 5001 avoids clashing with macOS's own service on port 5000.
+    #
+    # Two ways to run:
+    #   normal (default)      — reachable from other devices (phone via
+    #                           Tailscale or home Wi-Fi), debugger OFF.
+    #   DASHBOARD_DEBUG=1     — auto-reload + rich error pages, but bound to
+    #                           THIS Mac only (127.0.0.1).
+    # They're mutually exclusive on purpose: Flask's debugger can execute
+    # code on this Mac from the browser, so it must never be reachable by
+    # anything else on the network.
+    debug = os.getenv("DASHBOARD_DEBUG", "").strip() == "1"
+    app.run(debug=debug,
+            host="127.0.0.1" if debug else "0.0.0.0",
+            port=5001)

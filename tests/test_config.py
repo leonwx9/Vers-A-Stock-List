@@ -25,5 +25,4 @@ def test_seven_products_carry_risk_flags():
 def test_rules_have_expected_portfolio_settings():
     rules = load_rules()
     assert rules["portfolio"]["starting_cash"] == 10000
-    assert rules["portfolio"]["whole_shares_only"] is True
     assert rules["portfolio"]["shortlist_size"] == 5

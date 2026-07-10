@@ -49,12 +49,13 @@ _session = requests.Session()
 def _get(url, **kwargs):
     """One polite GET: identified, rate-limited, 20s timeout.
 
-    Two EDGAR quirks handled here:
+    Three EDGAR quirks handled here:
       - the search API occasionally returns a 5xx for a query that works
-        seconds later, and
+        seconds later,
       - SEC answers bursts of requests with 403 (their rate-limit signal),
-        which clears after a short cool-down.
-    Both get retried with growing pauses before we give up.
+        which clears after a short cool-down, and
+      - the connection sometimes just times out or drops.
+    All three get retried with growing pauses before we give up.
     """
     last_error = None
     for attempt in range(4):
@@ -68,6 +69,8 @@ def _get(url, **kwargs):
             status = e.response.status_code
             if status < 500 and status != 403:
                 raise      # a genuine client error; retrying won't help
+        except requests.RequestException as e:
+            last_error = e  # timeout / dropped connection — worth retrying
     raise last_error
 
 

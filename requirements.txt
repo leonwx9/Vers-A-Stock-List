@@ -1,11 +1,14 @@
 # The Python libraries this project needs.
 # Install them all with:  pip install -r requirements.txt
 
-flask==3.0.3          # the small web server that powers the dashboard
-python-dotenv==1.0.1  # reads settings/keys from the .env file
-requests==2.32.3      # makes calls to outside services (EDGAR, the AI, prices)
-PyYAML==6.0.2         # reads the .yaml config files (universe, rules)
-anthropic             # Anthropic's official library (used when LLM_PROVIDER=anthropic)
-pytest                # runs the automated tests (tests/ folder)
-gunicorn             # production web server (used by the cloud host, not locally)
-psycopg2-binary      # talks to the cloud Postgres database (only used when DATABASE_URL is set)
+# Every version is pinned (==) on purpose: the cloud host reinstalls these
+# on every deploy, and an unpinned library could silently upgrade itself and
+# change behaviour between two deploys of identical code.
+flask==3.0.3            # the small web server that powers the dashboard
+python-dotenv==1.0.1    # reads settings/keys from the .env file
+requests==2.32.3        # makes calls to outside services (EDGAR, the AI, prices)
+PyYAML==6.0.2           # reads the .yaml config files (universe, rules)
+anthropic==0.116.0      # Anthropic's official library (used when LLM_PROVIDER=anthropic)
+pytest==8.4.2           # runs the automated tests (tests/ folder)
+gunicorn==23.0.0        # production web server (used by the cloud host, not locally)
+psycopg2-binary==2.9.12 # talks to the cloud Postgres database (only used when DATABASE_URL is set)
