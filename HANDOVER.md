@@ -42,10 +42,22 @@ your portfolio history and picks live on the Mac (and in git).
    holding is also watched against its own stop-loss automatically. Look
    at **Pending orders** to see what's still waiting, and **Sell
    decisions** to read the AI's reasoning for every HOLD/SELL call.
-4. **Scan EDGAR** (AI Pivot Scanner panel) — whenever you're curious.
-   Finding *nothing* is normal; genuine small-cap non-tech AI pivots are
-   rare, which is rather the point.
-5. Click any ticker for its chart, statistics, news, and a "why this
+4. **Scan EDGAR** (Event Scanner panel → AI Pivots view) — whenever you're
+   curious. Finding *nothing* is normal; genuine small-cap non-tech AI
+   pivots are rare, which is rather the point.
+5. **Strategy Lab** (same panel → Strategy Lab view, a segmented toggle
+   next to the header) — write down event-timing patterns you notice
+   ("when X happens, Y sector tends to move"): a name, plain-English
+   description, what would make you consider buying, what would make you
+   consider selling, affected sectors, risk notes, tags. Press
+   **Brainstorm ideas** any time you want the AI to suggest more (always
+   badged AI, never mistaken for your own). Press **Scan now** whenever
+   you're curious whether current news matches something in your
+   journal — every match shows what's happening, its sources, the bull
+   case, the counter-case, the risks, and an honest confidence level.
+   This is purely for research; nothing here can buy or sell anything,
+   pretend or real.
+6. Click any ticker for its chart, statistics, news, and a "why this
    rating" deep dive (one AI request, then cached — press Refresh for a
    fresh one).
 
@@ -58,10 +70,13 @@ the same thing a real broker would tell you the next morning.
 ## What it costs
 
 - **AI requests** are the only cost: one analysis run ≈ 10 requests, a
-  deep dive or scanner candidate ≈ 1 each. On OpenRouter you can watch
-  spend at openrouter.ai → Activity. A few dollars a month at hobby usage.
-- Prices (Yahoo) and filings (EDGAR) are free. Render and Tailscale are on
-  free tiers.
+  deep dive or scanner candidate ≈ 1 each, a Strategy Lab **Brainstorm**
+  or **Scan now** ≈ 1 request each (roughly 1-2¢ apiece). On OpenRouter
+  you can watch spend at openrouter.ai → Activity. A few dollars a month
+  at hobby usage. The Lab's optional once-a-day auto-scan is OFF by
+  default — turning it on adds ≈1-2¢/day, nothing until you flip it on.
+- Prices (Yahoo), filings (EDGAR), and news headlines are free. Render and
+  Tailscale are on free tiers.
 
 ## When something breaks
 
@@ -75,6 +90,8 @@ the same thing a real broker would tell you the next morning.
 | Prices look stale | 5-minute cache | wait 5 min, reload |
 | No news headlines on a ticker | Google News hiccup | harmless; try later |
 | Scanner shows fewer results than expected | SEC throttled us (it retries politely) | run the scan again in a minute |
+| Strategy Lab scan finds nothing | normal and honest — genuine event-timing setups are rare on most days | not a bug; try again another day, or after big news |
+| A Lab strategy suggestion looks incomplete/never appears | the AI's suggestion was missing a required field (rare) | dropped automatically, not saved — press Brainstorm again |
 | Phone can't reach the Mac copy | Mac asleep or Tailscale off | wake the Mac, check the Tailscale menu-bar icon |
 | Cloud copy slow to load | free server waking up | wait ~50 s, it's normal |
 | Cloud copy forgot the portfolio | free server restarted | expected — the Mac copy remembers |
@@ -130,11 +147,16 @@ git add -A && git commit -m "what changed" && git push
   a real fill once you check — the check only ever looks at FINISHED
   sessions, never a still-forming one, so opening the app mid-session (if
   you ever travel, say) can't fill an order against a half-finished day.
+- **The Strategy Lab is information-only, on purpose.** It cannot place
+  an order — pretend or real — no matter what a scan finds; the module is
+  built so it never even imports the code that could. A "setup" is a
+  starting point for your own research, not a signal.
 
 ## Where the bodies are buried
 
 - Secrets: `.env` (never committed) and Render's Environment tab.
-- Saved runs & portfolio: `dashboard/data/` (gitignored, Mac only).
+- Saved runs, portfolio, & Strategy Lab journal/scans: `dashboard/data/`
+  (gitignored, Mac only — or the cloud database if DATABASE_URL is set).
 - Audit trail of every analysis: `picks/` (committed).
 - Build history & decisions: `PROGRESS.md`; project rules: `CLAUDE.md`.
 

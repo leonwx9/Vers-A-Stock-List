@@ -209,13 +209,64 @@
     two buys competing for tight cash, an order placed the day before a
     weekend, …). 70→86 tests total, all offline.
 
+- **M0 — two review repairs** (2026-07-12, from a fresh-eyes review of the
+  order engine): a scoped analysis run appends currently-held stocks so
+  they get a HOLD/SELL review even when they're outside the chosen
+  watchlist — but those appended stocks were then also competing for (and
+  could win) a shortlist slot that belonged to the watchlist actually
+  being analysed. `run_analysis()` gained a `review_only` set so an
+  appended stock is reviewed but can never be shortlisted. Also: order
+  ids switched from a per-process time+counter to random bytes
+  (`secrets.token_hex`) — two cloud workers each running their own
+  counter from zero could otherwise hand out the same id.
+
+- **Event Strategy Lab** (2026-07-12, Leon's request — planned in
+  PLAN-strategy-lab.md, approved before building): a new view inside the
+  Event Scanner panel (renamed from "AI Pivot Scanner"), reached by a
+  segmented toggle — `[ AI Pivots | Strategy Lab ]`, remembered per
+  browser. Three parts, all information-only:
+  - **My journal** (`dashboard/strategy_lab/journal.py`): Leon's own
+    event-timing strategies (name, plain-English description, entry/exit
+    triggers, affected sectors, risk notes, tags) — full add/edit/delete,
+    saved permanently (file or the cloud database, same as everything
+    else). Each entry's `origin` ("leon" or "ai") is stamped by the
+    server, never accepted from the browser — editing an AI suggestion
+    can't relabel it as Leon's own thinking.
+  - **Brainstorm** (`brainstorm.py`): one AI request that reads the
+    existing journal (to avoid duplicates) and suggests new patterns,
+    saved badged `origin="ai"`. Malformed suggestions (missing a trigger)
+    are dropped, not guessed at; capped at `rules.yaml`'s
+    `lab.brainstorm_count`.
+  - **Scan now** (`setup_scanner.py` + `datasources/events_source.py`):
+    fetches current headlines (Google News RSS, free, no key, reusing the
+    same parser the ticker pages already use) for each strategy's tags,
+    then ONE AI request for the whole scan — never one per strategy — asks
+    which patterns look currently in play. The AI can only cite evidence
+    by NUMBER from a list the code supplies, so it can't reference a
+    headline it wasn't actually given. `parse_scan_response()` enforces
+    every guardrail structurally: a setup missing its counter-case,
+    risks, or a valid strategy/source reference is DROPPED, not patched —
+    there is no code path that produces a one-sided setup card. An
+    optional once-a-day auto-scan (default OFF) can run in the background
+    without blocking the page.
+  - The Lab module never imports the portfolio, scanner, or analysis code
+    — it can inform Leon but cannot place even a pretend trade. Cost:
+    headlines free; brainstorm/scan ≈1-2¢ each (same Sonnet model the
+    rest of the app already uses via OpenRouter).
+  - 29 new tests (`test_strategy_lab.py`), including one that specifically
+    proves a `null` AI-supplied counter_case can't slip past the guardrail
+    as the literal string `"None"`. 117 tests total, all offline.
+
 ## Next
 - Leon: create the free Neon database and paste DATABASE_URL into Render
-  (if not already done — makes the cloud copy's orders/positions persist).
+  (if not already done — makes the cloud copy's orders/positions/journal
+  persist).
 - Phase 2 proper: scheduled runs (so orders place/fill even when the
   dashboard isn't open) + a track-record panel (+ email?).
 - Decide: feed news headlines into the batch analysis so bull/bear cases
   rest on more than momentum (costs a bit more per run).
+- Try the Strategy Lab: write a strategy (or press Brainstorm), then Scan
+  now to see whether current news matches it.
 
 ## How to run
 ```

@@ -1,6 +1,6 @@
-# Vers A — Stock Searcher & AI Pivot Scanner
+# Vers A — Stock Searcher & Event Scanner
 
-A private dashboard that does three things:
+A private dashboard that does four things:
 
 1. **Watchlists + free search** — search any US-listed stock (plain lookup,
    no AI cost) and organise stocks into unlimited named, colour-tagged
@@ -17,6 +17,13 @@ A private dashboard that does three things:
    companies that have *just* disclosed an "AI pivot" in a filing, then reads
    the filing with deliberate skepticism: announced vs actually executed,
    can they fund it, red flags, hype score 1–10.
+4. **Event Strategy Lab** — a notebook for event-timing patterns ("when a
+   key oil chokepoint closes, energy-exposed assets tend to spike") rather
+   than stock picks: write your own strategies, ask the AI to brainstorm
+   more (clearly badged AI vs yours), and press "Scan now" to check
+   whether current news matches a saved pattern. Every match always shows
+   its counter-case, risks, sources, and an honest confidence level.
+   **Ideas to research, never advice — no automated or real trading.**
 
 Everything is plain-English and beginner-readable on purpose — the code is
 the documentation.
@@ -75,6 +82,8 @@ never reach GitHub.
     stop-loss % and its `_min`/`_max` band (the AI picks its own per-stock
     stop-loss within that band), …
   - scanner rules: market-cap ceiling, excluded sectors, lookback days, …
+  - `lab` rules: news searches per scan, headlines per search, the cap on
+    what one scan feeds the AI, and how many patterns "Brainstorm" suggests
 
 ## Phone & cloud
 
@@ -90,7 +99,7 @@ never reach GitHub.
 
 ## Tests
 
-A suite of automated tests (86 and growing), all offline — external
+A suite of automated tests (117 and growing), all offline — external
 services are faked:
 
 ```bash
@@ -110,6 +119,8 @@ dashboard/
   analysis/            searcher (bull/bear/conviction) + per-ticker deep dive
   portfolio/           the $10,000 paper-trading engine
   scanner/             EDGAR client + the skeptical AI-pivot scanner
+  strategy_lab/        journal + brainstorm + news-based setup scanner
+                       (information only — never imports the portfolio)
   static/              CSS, JS, icons, vendored chart library
   templates/           the HTML pages
   data/                saved runs & portfolio state (gitignored)
