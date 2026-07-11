@@ -172,6 +172,95 @@ def test_second_run_keeps_the_first_runs_picks_file(tmp_path, monkeypatch):
     assert len(list((tmp_path / "picks").glob("*.md"))) == 2
 
 
+def test_parser_rejects_an_entry_price_way_off_the_current_price():
+    # AAPL trades at $200 (see current_prices below); the AI's $13 is a
+    # formatting slip (a dropped decimal) — must NOT be trusted.
+    reply = '[{"ticker": "AAPL", "bull": "b", "bear": "b", "verdict": "bull", ' \
+            '"conviction": 7, "stop_loss": "s", "timeframe": "t", ' \
+            '"entry_price": 13, "stop_loss_pct": 10}]'
+    parsed = parse_batch_response(reply, {"AAPL"}, current_prices={"AAPL": 200})
+    assert parsed["AAPL"]["entry_price"] is None
+
+
+def test_parser_accepts_a_sane_entry_price_below_current():
+    reply = '[{"ticker": "AAPL", "bull": "b", "bear": "b", "verdict": "bull", ' \
+            '"conviction": 7, "stop_loss": "s", "timeframe": "t", ' \
+            '"entry_price": 195, "stop_loss_pct": 10}]'
+    parsed = parse_batch_response(reply, {"AAPL"}, current_prices={"AAPL": 200})
+    assert parsed["AAPL"]["entry_price"] == 195
+
+
+def test_parser_clamps_out_of_band_stop_loss_pct_to_the_default():
+    reply = '[{"ticker": "AAPL", "bull": "b", "bear": "b", "verdict": "bull", ' \
+            '"conviction": 7, "stop_loss": "s", "timeframe": "t", ' \
+            '"entry_price": 195, "stop_loss_pct": 90}]'
+    parsed = parse_batch_response(reply, {"AAPL"}, current_prices={"AAPL": 200},
+                                  default_stop_loss_pct=12)
+    assert parsed["AAPL"]["stop_loss_pct"] == 12
+
+
+def test_parser_normalises_action_and_defaults_junk_to_na():
+    reply = '[{"ticker": "AAPL", "bull": "b", "bear": "b", "verdict": "bull", ' \
+            '"conviction": 7, "stop_loss": "s", "timeframe": "t", ' \
+            '"action": " SELL "}, ' \
+            '{"ticker": "MSFT", "bull": "b", "bear": "b", "verdict": "bull", ' \
+            '"conviction": 7, "stop_loss": "s", "timeframe": "t", ' \
+            '"action": "maybe"}]'
+    parsed = parse_batch_response(reply, {"AAPL", "MSFT"})
+    assert parsed["AAPL"]["action"] == "sell"
+    assert parsed["MSFT"]["action"] == "n/a"
+
+
+def test_held_stock_gets_a_hold_or_sell_review(tmp_path, monkeypatch):
+    _redirect_saves(tmp_path, monkeypatch)
+
+    class ReviewingProvider:
+        """AAPL is held and gets told to SELL; MSFT isn't held → 'n/a'."""
+        def complete(self, system, user, max_tokens=4000):
+            tickers = [line.split()[1] for line in user.splitlines()
+                      if line.startswith("- ")]
+            return json.dumps([
+                {"ticker": t, "bull": "hold case", "bear": "sell case",
+                 "verdict": "bull", "conviction": 5, "stop_loss": "s",
+                 "stop_loss_pct": 10, "timeframe": "t", "entry_price": 100,
+                 "action": "sell" if t == "AAPL" else "n/a"}
+                for t in tickers
+            ])
+
+    result = run_analysis(ReviewingProvider(), SampleSource(),
+                          universe=TINY_UNIVERSE, rules=TINY_RULES,
+                          holdings={"AAPL": 250.0})
+    assert result["held_reviews"]["AAPL"] == {"action": "sell", "reason": "sell case"}
+    assert "MSFT" not in result["held_reviews"]
+
+
+def test_holding_outside_the_universe_gets_appended_and_reviewed(tmp_path, monkeypatch):
+    # A position from a DIFFERENT watchlist than the one being analysed
+    # must still show up (the caller appends it to `universe`) and get
+    # its own hold/sell review.
+    _redirect_saves(tmp_path, monkeypatch)
+    extra_asset = {"symbol": "RKLB", "name": "Rocket Lab", "type": "stock", "flags": []}
+    universe_plus_holding = TINY_UNIVERSE + [extra_asset]
+
+    class HolderProvider(FakeProvider):
+        def complete(self, system, user, max_tokens=4000):
+            tickers = [line.split()[1] for line in user.splitlines()
+                      if line.startswith("- ")]
+            return json.dumps([
+                {"ticker": t, "bull": "b", "bear": "b", "verdict": "bull",
+                 "conviction": 5, "stop_loss": "s", "stop_loss_pct": 10,
+                 "timeframe": "t", "entry_price": 25,
+                 "action": "hold" if t == "RKLB" else "n/a"}
+                for t in tickers
+            ])
+
+    result = run_analysis(HolderProvider(), SampleSource(),
+                          universe=universe_plus_holding, rules=TINY_RULES,
+                          holdings={"RKLB": 20.0})
+    assert result["held_reviews"]["RKLB"]["action"] == "hold"
+    assert any(r["symbol"] == "RKLB" for r in result["rows"])
+
+
 def test_history_records_every_run_with_entry_prices(tmp_path, monkeypatch):
     _redirect_saves(tmp_path, monkeypatch)
     run_analysis(FakeProvider(), SampleSource(),
