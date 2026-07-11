@@ -169,9 +169,51 @@
     analysis still reasons mostly from momentum numbers — feeding real
     headlines into it is a feature choice for Leon, not a bug fix.
 
+- **Pending-order engine** (2026-07-11, Leon's request — planned in
+  PLAN-order-engine.md, approved before building): the instant "Sync to
+  shortlist" button is gone. Every analysis run now PLACES ORDERS instead
+  of trading immediately:
+  - Each shortlisted pick gets a planned BUY at the AI's own entry price
+    (sanity-checked — an unrealistic price means the pick is skipped this
+    run, never silently substituted) and its own AI-chosen stop-loss %
+    (5–25%, tailored to the stock's volatility).
+  - Every stock the portfolio currently holds gets an explicit HOLD/SELL
+    review EVERY run — even if it's outside the run's watchlist scope, so
+    a position never goes unreviewed just because a different list was
+    analysed. A SELL review places a sell order.
+  - Orders then fill THEMSELVES — no button. Whenever the dashboard is
+    opened, `process_fills()` checks real completed trading sessions since
+    each order was placed (in `America/New_York` time, so an order can
+    never fill in the session it was placed during): a BUY fills at the
+    session's open if it gapped below the plan, or at the plan's own
+    price if the session merely dipped to it; a SELL fills at the next
+    session's open; every holding is also checked against its own
+    stop-loss on the CLOSE (a brief intraday dip that recovers by the
+    bell doesn't sell). Sells are processed before buys within a session,
+    so sale proceeds can fund the same day's buys (fill-time cash sizing
+    — budgets are caps, not reservations, so cash-tight days serve the
+    highest-conviction pick first). A fresh analysis run replaces any
+    still-pending orders — they live roughly 1-2 days, not forever.
+  - New UI: a **Pending orders** section (planned price, budget, status —
+    filled/replaced/skipped) and a **Sell decisions** section (every
+    holding's HOLD/SELL call with the AI's full reasoning), both
+    collapsible under the trade log. The holdings table gained a Stop
+    column. `rules.yaml` gained `stop_loss_pct_min`/`_max` (the AI's
+    per-stock number is clamped into this band, or falls back to
+    `stop_loss_pct`).
+  - Migration-safe: old portfolio saves (no `orders` key, positions
+    without their own `stop_loss_pct`) load and behave exactly as before.
+    test_portfolio.py (14→21) and test_searcher.py (10→16) rewritten
+    around the order/fill model, using a scripted fake price source for
+    deterministic date-based fill testing (a gap-down, a stop-loss close,
+    two buys competing for tight cash, an order placed the day before a
+    weekend, …). 70→86 tests total, all offline.
+
 ## Next
-- Leon: create the free Neon database and paste DATABASE_URL into Render.
-- Phase 2 proper: scheduled runs + track-record panel (+ email?).
+- Leon: create the free Neon database and paste DATABASE_URL into Render
+  (if not already done — makes the cloud copy's orders/positions persist).
+- Phase 2 proper: scheduled runs (so orders place/fill even when the
+  dashboard isn't open) + a track-record panel (+ email?).
 - Decide: feed news headlines into the batch analysis so bull/bear cases
   rest on more than momentum (costs a bit more per run).
 

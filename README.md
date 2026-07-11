@@ -8,9 +8,11 @@ A private dashboard that does three things:
    98-ticker CMC list lives on as the default watchlist.
 2. **Stock Searcher** — runs a bull-vs-bear AI debate on every *watchlisted*
    stock (only what you deliberately track costs AI money), scores
-   conviction 1–10, shortlists the top 5, and manages a **$10,000
-   paper-trading portfolio** that mirrors the shortlist. Pretend money
-   only — this app never trades for real.
+   conviction 1–10, and places **planned orders** in a $10,000 pretend
+   **paper-trading portfolio**: a BUY at the AI's own entry price for each
+   fresh shortlisted pick, and a HOLD/SELL call on every stock already
+   held. Orders fill themselves against real trading sessions — nothing
+   to press, and nothing is ever real money.
 3. **AI Pivot Scanner** — searches SEC EDGAR for small-cap, non-tech
    companies that have *just* disclosed an "AI pivot" in a filing, then reads
    the filing with deliberate skepticism: announced vs actually executed,
@@ -69,7 +71,9 @@ never reach GitHub.
 - `dashboard/config/rules.yaml` — everything tunable:
   - `data.price_source`: `live` (Yahoo Finance) or `sample` (offline fake
     data for development — deterministic, no internet needed)
-  - portfolio rules: starting cash, max $ per position, stop-loss %, …
+  - portfolio rules: starting cash, max $ per position, the fallback
+    stop-loss % and its `_min`/`_max` band (the AI picks its own per-stock
+    stop-loss within that band), …
   - scanner rules: market-cap ceiling, excluded sectors, lookback days, …
 
 ## Phone & cloud
@@ -86,7 +90,7 @@ never reach GitHub.
 
 ## Tests
 
-A suite of automated tests (70 and growing), all offline — external
+A suite of automated tests (86 and growing), all offline — external
 services are faked:
 
 ```bash
