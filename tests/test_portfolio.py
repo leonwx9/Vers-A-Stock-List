@@ -352,3 +352,19 @@ def test_migration_old_portfolio_without_orders_key_loads_fine(tmp_path):
     pf = PaperPortfolio(ScriptedSource({}), rules=RULES, state_path=path)
     assert pf.state["orders"] == []
     pf.process_fills()  # must not crash on old state
+
+
+def test_order_ids_are_random_not_a_process_counter(tmp_path):
+    # The cloud runs several server workers as separate processes, each
+    # with its own memory — a counter-based id ("ord-143022-1") could be
+    # handed out by two workers in the same second. Random bytes avoid
+    # that entirely, so there's no per-process state to check — just that
+    # ids come out unique and in the new shape.
+    pf = make_portfolio(tmp_path, {})
+    orders = pf.place_orders(
+        [_row("AAA", entry_price=10), _row("BBB", entry_price=10)],
+        ["AAA", "BBB"], {}, now=PLACE_NOW)
+    ids = [o["id"] for o in orders]
+    assert len(ids) == len(set(ids))                     # all unique
+    assert all(o["id"].startswith("ord-") for o in orders)
+    assert all(len(o["id"]) == len("ord-") + 8 for o in orders)  # 4 random bytes = 8 hex chars

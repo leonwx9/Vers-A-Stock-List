@@ -261,6 +261,40 @@ def test_holding_outside_the_universe_gets_appended_and_reviewed(tmp_path, monke
     assert any(r["symbol"] == "RKLB" for r in result["rows"])
 
 
+def test_review_only_holding_never_crowds_out_the_shortlist(tmp_path, monkeypatch):
+    # A scoped run appends a held stock from ANOTHER watchlist so it gets
+    # reviewed — but that appended stock must never win a shortlist slot
+    # that belongs to the watchlist actually being analysed, even with
+    # the highest conviction score of the whole batch.
+    _redirect_saves(tmp_path, monkeypatch)
+    extra_asset = {"symbol": "RKLB", "name": "Rocket Lab", "type": "stock", "flags": []}
+    universe_plus_holding = TINY_UNIVERSE + [extra_asset]
+
+    class TopConvictionOnRklb(FakeProvider):
+        def complete(self, system, user, max_tokens=4000):
+            tickers = [line.split()[1] for line in user.splitlines()
+                      if line.startswith("- ")]
+            return json.dumps([
+                {"ticker": t, "bull": "b", "bear": "b", "verdict": "bull",
+                 "conviction": 10 if t == "RKLB" else 5,
+                 "stop_loss": "s", "stop_loss_pct": 10,
+                 "timeframe": "t", "entry_price": 25,
+                 "action": "hold" if t == "RKLB" else "n/a"}
+                for t in tickers
+            ])
+
+    result = run_analysis(TopConvictionOnRklb(), SampleSource(),
+                          universe=universe_plus_holding, rules=TINY_RULES,
+                          holdings={"RKLB": 20.0}, review_only={"RKLB"})
+
+    assert "RKLB" not in result["shortlist"]           # never wins a slot
+    assert result["held_reviews"]["RKLB"]["action"] == "hold"  # still reviewed
+    assert any(r["symbol"] == "RKLB" for r in result["rows"])  # still shown
+    # Both shortlist slots still went to genuine in-scope picks.
+    assert len(result["shortlist"]) == 2
+    assert set(result["shortlist"]) <= {"AAPL", "MSFT", "NVDA"}
+
+
 def test_history_records_every_run_with_entry_prices(tmp_path, monkeypatch):
     _redirect_saves(tmp_path, monkeypatch)
     run_analysis(FakeProvider(), SampleSource(),

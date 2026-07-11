@@ -32,6 +32,7 @@ Everything lives in data/portfolio.json (gitignored — it's runtime data;
 or the cloud database, if DATABASE_URL is set — see storage.py).
 """
 
+import secrets
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -42,13 +43,13 @@ from ..storage import FileDoc, get_doc
 # the stock market itself runs on — not wherever this server happens to be.
 NY_TZ = ZoneInfo("America/New_York")
 
-_order_counter = 0
-
 
 def _new_order_id():
-    global _order_counter
-    _order_counter += 1
-    return f"ord-{datetime.now().strftime('%H%M%S')}-{_order_counter}"
+    # Random, not a counter: the cloud runs several server workers as
+    # separate processes, each with its own memory — a per-process counter
+    # could hand out the same id twice. Random bytes can't collide that way
+    # (same trick as the watchlist ids).
+    return "ord-" + secrets.token_hex(4)
 
 
 def _eligible_from_date(placed_at_utc):

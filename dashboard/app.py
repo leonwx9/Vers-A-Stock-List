@@ -216,15 +216,19 @@ def api_run_analysis():
                             "message": "That watchlist no longer exists."}), 404
 
     # Pull in every currently-held stock this run's scope doesn't already
-    # cover, so it still gets a HOLD/SELL review this run.
+    # cover, so it still gets a HOLD/SELL review this run. Track which
+    # symbols got appended this way — they must be reviewed but must NEVER
+    # compete for a shortlist slot that belongs to the chosen watchlist.
     positions = portfolio.current_positions()
     universe_symbols = {a["symbol"] for a in universe}
+    review_only = set()
     for symbol in positions:
         if symbol not in universe_symbols:
             universe.append(watchlists.get_stock(symbol) or
                             {"symbol": symbol, "name": symbol,
                              "type": "stock", "flags": []})
             universe_symbols.add(symbol)
+            review_only.add(symbol)
 
     if not universe:
         return jsonify({"status": "error",
@@ -239,7 +243,8 @@ def api_run_analysis():
         holdings_for_review = {s: p["avg_cost"] for s, p in positions.items()}
         result = searcher.run_analysis(provider, prices, universe=universe,
                                        scope_name=scope_name,
-                                       holdings=holdings_for_review)
+                                       holdings=holdings_for_review,
+                                       review_only=review_only)
         orders = portfolio.place_orders(result["rows"], result["shortlist"],
                                         result["held_reviews"])
     except Exception as e:

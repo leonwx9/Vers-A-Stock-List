@@ -168,7 +168,7 @@ def parse_batch_response(text, expected_tickers, current_prices=None,
 
 
 def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
-                 scope_name=None, holdings=None):
+                 scope_name=None, holdings=None, review_only=None):
     """Run one full analysis. Returns the result dict (also saved to disk).
 
     provider — an LLM provider (from llm.provider.get_provider())
@@ -184,10 +184,20 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
                stock there first, so this function stays unaware of
                watchlists). The result's "held_reviews" key collects the
                outcome for the portfolio engine to act on.
+    review_only — optional set of symbols that must NEVER be shortlist-
+               eligible, no matter how bullish their own analysis turns
+               out. For a run scoped to one watchlist, the caller appends
+               held-but-out-of-scope stocks to `universe` so they still
+               get reviewed above — but those appended stocks would
+               otherwise compete for (and could win) a shortlist slot
+               that belongs to the watchlist actually being analysed.
+               Pass exactly the appended symbols here to keep them
+               review-only.
     """
     universe = universe or load_universe()
     rules = rules or load_rules()
     holdings = holdings or {}
+    review_only = review_only or set()
     batch_size = rules["analysis"]["batch_size"]
     slp_min = rules["portfolio"].get("stop_loss_pct_min", 5)
     slp_max = rules["portfolio"].get("stop_loss_pct_max", 25)
@@ -266,12 +276,15 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
         rows.append(row)
     by_symbol = {r["symbol"]: r for r in rows}
 
-    # 4. Shortlist: highest conviction first, skipping risk-flagged products
-    #    and anything whose own analysis says the BEAR side wins — a high
-    #    conviction score can't override the AI's own verdict.
+    # 4. Shortlist: highest conviction first, skipping risk-flagged products,
+    #    anything whose own analysis says the BEAR side wins (a high
+    #    conviction score can't override the AI's own verdict), and any
+    #    review-only symbol (a held stock appended just for its HOLD/SELL
+    #    check — it must never crowd out this run's own top picks).
     excluded = set(rules["portfolio"]["excluded_flags"])
     eligible = [r for r in rows
-                if not (set(r["flags"]) & excluded) and r.get("verdict") == "bull"]
+                if not (set(r["flags"]) & excluded) and r.get("verdict") == "bull"
+                and r["symbol"] not in review_only]
     eligible.sort(key=lambda r: r["conviction"], reverse=True)
     shortlist = [r["symbol"] for r in eligible[: rules["portfolio"]["shortlist_size"]]]
 
