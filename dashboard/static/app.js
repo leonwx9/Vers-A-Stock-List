@@ -32,6 +32,14 @@ let sortState = { key: "conviction", dir: -1 };  // default: best score first
 let filterText = "";
 let wlFilter = "all";                       // which watchlist the table shows
 
+// The latest analysis's HOLD/SELL review of each currently-held stock, and
+// the portfolio's own list of what it currently holds — the "Sell
+// decisions" panel needs BOTH (one loads from /api/analysis, the other
+// from /api/portfolio, independently and in either order), so it re-draws
+// itself whichever one finishes loading last.
+let heldReviews = {};
+let currentHoldingSymbols = [];
+
 // Collapse preferences survive page reloads via localStorage (a tiny
 // key-value store the browser keeps per site).
 // Everything hideable starts HIDDEN (the "!== '0'" pattern): folded unless
@@ -95,6 +103,7 @@ runButton.addEventListener("click", async () => {
     const data = await res.json();
     if (data.status === "ok") {
       render(data);
+      loadPortfolio();  // this run may have just placed orders — show them
     } else {
       statusLine.textContent = "⚠ " + data.message;
       clearSkeletons();
@@ -129,13 +138,18 @@ function openTicker(symbol) {
 
 /* ── Drawing ──────────────────────────────────────────────────────────── */
 function render(data) {
+  const orderNote = data.orders_placed
+    ? ` · ${data.orders_placed.length} order${data.orders_placed.length === 1 ? "" : "s"} placed`
+    : "";
   statusLine.textContent =
     `Last run: ${data.run_at.replace("T", " ")} · analysed: ${data.scope || "all watchlists"}` +
-    ` · data source: ${data.data_source}`;
+    ` · data source: ${data.data_source}${orderNote}`;
   currentRows = data.rows;
   renderShortlist(data);
   renderTable();
   renderWatchlists();  // fresh analysis prices → fill the Price columns
+  heldReviews = data.held_reviews || {};
+  renderSellDecisions();
 }
 
 function renderShortlist(data) {
@@ -310,30 +324,16 @@ let pfChart = null;
 let pfSeries = null;
 
 async function loadPortfolio() {
+  // Every call settles any orders that became due since the last look —
+  // there's no "sync" button any more, the portfolio updates itself.
   const res = await fetch("/api/portfolio");
   renderPortfolio(await res.json());
 }
 
-document.getElementById("sync-btn").addEventListener("click", async () => {
-  pfStatus.textContent = "Syncing the portfolio to the shortlist…";
-  const res = await fetch("/api/portfolio/sync", { method: "POST" });
-  const data = await res.json();
-  if (data.status === "ok") {
-    const n = data.trades_made.length;
-    pfStatus.textContent = n
-      ? `Done — ${n} trade${n > 1 ? "s" : ""}: ` +
-        data.trades_made.map((t) => `${t.action} ${t.shares} ${t.symbol}`).join(", ")
-      : "Done — already in sync, no trades needed.";
-    renderPortfolio(data);
-  } else {
-    pfStatus.textContent = "⚠ " + data.message;
-  }
-});
-
 document.getElementById("reset-btn").addEventListener("click", async () => {
   // confirm() pops the browser's built-in "are you sure?" box.
   if (!confirm("Reset the paper portfolio back to $10,000 cash? " +
-               "All pretend holdings and history will be wiped.")) return;
+               "All pretend holdings, orders, and history will be wiped.")) return;
   const res = await fetch("/api/portfolio/reset", { method: "POST" });
   pfStatus.textContent = "Portfolio reset.";
   renderPortfolio(await res.json());
@@ -351,7 +351,10 @@ function renderPortfolio(data) {
 
   drawPortfolioChart(data.history);
   renderHoldings(data.holdings);
+  renderOrders(data.orders || []);
   renderTrades(data.trades || []);
+  currentHoldingSymbols = data.holdings.map((h) => h.symbol);
+  renderSellDecisions();
 }
 
 /* ── The trade log: every trade, when it happened, and WHY ────────────── */
@@ -364,13 +367,13 @@ function renderTrades(trades) {
   const head = `
     <div class="panel-header" style="margin-top:1rem">
       <h3 class="subheading">Trade log (${trades.length})
-        <span class="hint">trades happen when you press “Sync to shortlist”</span></h3>
+        <span class="hint">fills happen automatically — see Pending orders below</span></h3>
       ${toggleBtn}
     </div>`;
 
   if (tradesCollapsed || !trades.length) {
     box.innerHTML = head + (trades.length ? "" :
-      `<p class="status-line">No trades yet — sync the portfolio after an analysis.</p>`);
+      `<p class="status-line">No trades yet — run an analysis to place some orders.</p>`);
     wireTradesToggle(trades);
     return;
   }
@@ -438,8 +441,9 @@ function drawPortfolioChart(history) {
 function renderHoldings(holdings) {
   const box = document.getElementById("pf-holdings");
   if (!holdings.length) {
-    box.innerHTML = `<p class="status-line">No holdings yet — run an analysis,
-      then press “Sync to shortlist” to invest the pretend cash.</p>`;
+    box.innerHTML = `<p class="status-line">No holdings yet — run an analysis
+      to place orders; they'll buy in on their own once the market reaches
+      the planned price.</p>`;
     return;
   }
 
@@ -467,6 +471,7 @@ function renderHoldings(holdings) {
       <td class="${h.pl >= 0 ? "up" : "down"}">
         ${h.pl >= 0 ? "+" : ""}$${h.pl.toLocaleString("en-US")} (${h.pl_pct >= 0 ? "+" : ""}${h.pl_pct}%)
       </td>
+      <td class="hint">-${h.stop_loss_pct}%</td>
       <td class="row-chevron">›</td>
     </tr>`).join("");
 
@@ -477,7 +482,8 @@ function renderHoldings(holdings) {
     </div>
     <table>
       <thead><tr>
-        <th>Ticker</th><th>Shares</th><th>Paid</th><th>Now</th><th>Value</th><th>P / L</th><th></th>
+        <th>Ticker</th><th>Shares</th><th>Paid</th><th>Now</th><th>Value</th><th>P / L</th>
+        <th title="Auto-sells if a session closes this far below cost">Stop</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -493,6 +499,123 @@ function wireHoldingsToggle(holdings) {
     holdingsCollapsed = !holdingsCollapsed;
     localStorage.setItem("collapse-holdings", holdingsCollapsed ? "1" : "0");
     renderHoldings(holdings);
+  });
+}
+
+/* ── Pending orders: what's planned, and what happened to older ones ──── */
+/* An order plans a BUY at a limit price, or a plain SELL — see
+   PLAN-order-engine.md for the fill rules. This just displays whatever
+   the server hands back: pending orders first, then a little history of
+   what was filled/replaced/skipped, so Leon can see what happened to his
+   last run's picks even after they've resolved. */
+let ordersCollapsed = localStorage.getItem("collapse-orders") !== "0"; // default: folded
+
+const ORDER_STATUS_LABEL = {
+  pending: "Pending", filled: "Filled", replaced: "Replaced",
+  cancelled: "Cancelled", skipped_bad_price: "Skipped (bad price)",
+};
+
+function renderOrders(orders) {
+  const box = document.getElementById("pf-orders");
+  const toggleBtn = `<button id="toggle-orders" class="mini-btn">
+    ${ordersCollapsed ? "Show" : "Hide"}</button>`;
+  const pendingCount = orders.filter((o) => o.status === "pending").length;
+  const head = `
+    <div class="panel-header" style="margin-top:1rem">
+      <h3 class="subheading">Pending orders (${pendingCount})
+        <span class="hint">fill on their own once a real session reaches the plan</span></h3>
+      ${toggleBtn}
+    </div>`;
+
+  if (ordersCollapsed || !orders.length) {
+    box.innerHTML = head + (orders.length ? "" :
+      `<p class="status-line">No orders yet — run an analysis to place some.</p>`);
+    wireOrdersToggle(orders);
+    return;
+  }
+
+  // Pending orders first (most actionable), then everything else newest-ish.
+  const sorted = [...orders].sort((a, b) =>
+    (a.status === "pending") === (b.status === "pending") ? 0 :
+    a.status === "pending" ? -1 : 1);
+
+  const items = sorted.map((o) => {
+    const plan = o.type === "buy"
+      ? (o.limit_price !== undefined ? `$${o.limit_price} or better` : "—")
+      : "next session's open";
+    const detail = o.status === "filled"
+      ? `filled at $${o.filled_price} (session ${esc(o.filled_at)})`
+      : o.status === "cancelled"
+      ? esc(o.cancelled_reason || "")
+      : esc(o.reason || "");
+    return `
+      <div class="trade-item ${o.status !== "pending" ? "muted" : ""}">
+        <span class="trade-badge ${esc(o.type)}">${esc(o.type.toUpperCase())}</span>
+        <span class="trade-what">${esc(o.symbol)} · ${plan}</span>
+        <span class="hint">${esc(ORDER_STATUS_LABEL[o.status] || o.status)}</span>
+        <span class="trade-why">${detail}</span>
+      </div>`;
+  }).join("");
+
+  box.innerHTML = head + `<div class="trade-log">${items}</div>`;
+  wireOrdersToggle(orders);
+}
+
+function wireOrdersToggle(orders) {
+  document.getElementById("toggle-orders").addEventListener("click", () => {
+    ordersCollapsed = !ordersCollapsed;
+    localStorage.setItem("collapse-orders", ordersCollapsed ? "1" : "0");
+    renderOrders(orders);
+  });
+}
+
+/* ── Sell decisions: the AI's HOLD/SELL call on every current holding ──── */
+/* Fed by TWO independent loaders (the analysis panel's held_reviews, and
+   the portfolio panel's list of what's actually still held) — re-drawn
+   from both, so it settles correctly no matter which finishes loading
+   first. Only holdings we STILL own are shown, so a stock already sold
+   doesn't linger here. */
+let sellDecisionsCollapsed = localStorage.getItem("collapse-sell-decisions") !== "0";
+
+function renderSellDecisions() {
+  const box = document.getElementById("pf-sell-decisions");
+  const rows = currentHoldingSymbols
+    .filter((symbol) => heldReviews[symbol])
+    .map((symbol) => ({ symbol, ...heldReviews[symbol] }));
+
+  const toggleBtn = `<button id="toggle-sell-decisions" class="mini-btn">
+    ${sellDecisionsCollapsed ? "Show" : "Hide"}</button>`;
+  const head = `
+    <div class="panel-header" style="margin-top:1rem">
+      <h3 class="subheading">Sell decisions (${rows.length})
+        <span class="hint">why the latest analysis said HOLD or SELL on each holding</span></h3>
+      ${toggleBtn}
+    </div>`;
+
+  if (sellDecisionsCollapsed || !rows.length) {
+    box.innerHTML = head + (rows.length ? "" :
+      `<p class="status-line">No reviewed holdings yet — run an analysis.</p>`);
+    wireSellDecisionsToggle();
+    return;
+  }
+
+  const items = rows.map((r) => `
+    <div class="trade-item">
+      <span class="trade-badge ${r.action === "sell" ? "sell" : "hold-badge"}">
+        ${esc(r.action.toUpperCase())}</span>
+      <span class="trade-what">${esc(r.symbol)}</span>
+      <span class="trade-why">${esc(r.reason)}</span>
+    </div>`).join("");
+
+  box.innerHTML = head + `<div class="trade-log">${items}</div>`;
+  wireSellDecisionsToggle();
+}
+
+function wireSellDecisionsToggle() {
+  document.getElementById("toggle-sell-decisions").addEventListener("click", () => {
+    sellDecisionsCollapsed = !sellDecisionsCollapsed;
+    localStorage.setItem("collapse-sell-decisions", sellDecisionsCollapsed ? "1" : "0");
+    renderSellDecisions();
   });
 }
 

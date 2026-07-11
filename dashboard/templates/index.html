@@ -90,12 +90,9 @@
       <div class="panel-header">
         <div>
           <h2>Paper Portfolio</h2>
-          <p class="panel-subtitle">$10,000 pretend money · mirrors the shortlist · whole shares · stop-loss discipline</p>
+          <p class="panel-subtitle">$10,000 pretend money · orders plan a price, then fill themselves against real trading sessions · whole shares · stop-loss discipline</p>
         </div>
-        <div class="btn-row">
-          <button id="sync-btn" class="action-btn">Sync to shortlist</button>
-          <button id="reset-btn" class="action-btn ghost-btn">Reset</button>
-        </div>
+        <button id="reset-btn" class="action-btn ghost-btn">Reset</button>
       </div>
       <p id="portfolio-status" class="status-line"></p>
 
@@ -111,8 +108,17 @@
       <!-- Current holdings -->
       <div id="pf-holdings" class="table-wrap"></div>
 
+      <!-- Orders an analysis run has placed: planned price, budget, status.
+           They fill themselves — no button — whenever a real trading
+           session reaches the planned price. Collapsible. -->
+      <div id="pf-orders"></div>
+
       <!-- Every trade ever made: when, what, and why. Collapsible. -->
       <div id="pf-trades"></div>
+
+      <!-- The AI's HOLD/SELL review of every stock currently held, with
+           its full reasoning. Collapsible. -->
+      <div id="pf-sell-decisions"></div>
     </section>
 
     <!-- ── Section 3: the AI Pivot Scanner ───────────────────────────── -->

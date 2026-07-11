@@ -638,9 +638,15 @@ html { scroll-behavior: smooth; }
 }
 .trade-badge.buy { background: var(--accent); }
 .trade-badge.sell { background: var(--red); }
+/* HOLD isn't a gain or a loss — a neutral badge, not green/red. */
+.trade-badge.hold-badge { background: var(--ink-soft); }
 
 .trade-what { font-weight: bold; white-space: nowrap; }
 .trade-why { color: var(--ink-soft); flex: 1; min-width: 200px; }
+
+/* A resolved order (filled/replaced/skipped) fades once it's no longer
+   actionable — still visible for context, just less prominent. */
+.trade-item.muted { opacity: 0.6; }
 
 /* ── Watchlists panel ──────────────────────────────────────────────── */
 .search-box { position: relative; margin-bottom: 0.5rem; }
