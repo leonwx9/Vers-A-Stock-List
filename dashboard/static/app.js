@@ -1022,3 +1022,259 @@ function renderScanner(data) {
 }
 
 loadScanner();
+
+/* ── Event Scanner view toggle: AI Pivots ↔ Strategy Lab ───────────────── */
+const scannerSubtitle = document.getElementById("scanner-subtitle");
+const pivotView = document.getElementById("pivot-view");
+const labView = document.getElementById("lab-view");
+
+const PIVOT_SUBTITLE = "Small-cap non-tech companies newly disclosing AI pivots · SEC EDGAR · skeptical analysis";
+const LAB_SUBTITLE = "Event-timing patterns to research · not investment advice";
+
+function setScannerView(view) {
+  const isLab = view === "lab";
+  pivotView.hidden = isLab;
+  labView.hidden = !isLab;
+  scanButton.hidden = isLab;  // "Scan EDGAR" only makes sense in the pivots view
+  scannerSubtitle.textContent = isLab ? LAB_SUBTITLE : PIVOT_SUBTITLE;
+  document.querySelectorAll("#scanner-view-group .seg").forEach((b) =>
+    b.classList.toggle("active", b.dataset.view === view));
+  localStorage.setItem("scanner-view", view);
+}
+
+document.getElementById("scanner-view-group").addEventListener("click", (e) => {
+  const btn = e.target.closest(".seg");
+  if (btn) setScannerView(btn.dataset.view);
+});
+
+setScannerView(localStorage.getItem("scanner-view") || "pivots");
+
+/* ── Strategy Lab ─────────────────────────────────────────────────────── */
+/* Three parts: Leon's own journal of event-timing patterns, an AI
+   "brainstorm" that adds more (clearly badged AI vs MINE — see
+   journal.py for why that badge can't be faked), and a "Scan now" that
+   checks current headlines against the journal. Framed everywhere as
+   ideas to research — never advice — and this code has no path that
+   could ever place even a pretend trade. */
+let labStrategies = [];
+let labEditingId = null;   // which strategy the open form is editing, or null = new
+
+const labScanStatus = document.getElementById("lab-scan-status");
+const labJournalStatus = document.getElementById("lab-journal-status");
+const labScanBtn = document.getElementById("lab-scan-btn");
+const labDailyToggle = document.getElementById("lab-daily-toggle");
+
+async function loadLab() {
+  const res = await fetch("/api/lab");
+  const data = await res.json();
+  labStrategies = data.strategies;
+  renderLabSetups(data.setups);
+  renderLabStrategies();
+  labDailyToggle.checked = !!data.settings.daily_scan;
+  if (data.daily_scan_running) {
+    labScanStatus.textContent = "Running today's automatic scan in the background…";
+  }
+}
+
+labDailyToggle.addEventListener("change", async () => {
+  const wanted = labDailyToggle.checked;
+  const res = await fetch("/api/lab/settings", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ daily_scan: wanted }),
+  });
+  const data = await res.json();
+  if (data.status !== "ok") labDailyToggle.checked = !wanted;  // revert on failure
+});
+
+labScanBtn.addEventListener("click", async () => {
+  labScanBtn.disabled = true;
+  labScanStatus.textContent = "Checking current headlines against your journal…";
+  document.getElementById("lab-setups").innerHTML =
+    `<div class="skeleton" style="height:140px"></div>`;
+  try {
+    const res = await fetch("/api/lab/scan", { method: "POST" });
+    const data = await res.json();
+    if (data.status === "ok") {
+      renderLabSetups(data);
+    } else {
+      labScanStatus.textContent = "⚠ " + data.message;
+      document.getElementById("lab-setups").innerHTML = "";
+    }
+  } catch (err) {
+    labScanStatus.textContent = "⚠ Could not reach the server: " + err.message;
+    document.getElementById("lab-setups").innerHTML = "";
+  } finally {
+    labScanBtn.disabled = false;
+  }
+});
+
+function renderLabSetups(data) {
+  const box = document.getElementById("lab-setups");
+  if (!data) {
+    labScanStatus.textContent = "No scan yet — press “Scan now” to check current headlines.";
+    box.innerHTML = "";
+    return;
+  }
+  labScanStatus.textContent =
+    `Last scan: ${data.run_at.replace("T", " ")} · ${data.headlines_examined} ` +
+    `headlines examined · ${data.setups.length} setup${data.setups.length === 1 ? "" : "s"}`;
+
+  const cards = data.setups.map((s) => `
+    <div class="scan-card">
+      <div class="scan-head">
+        <div>
+          <span class="pick-symbol">${esc(s.strategy_name)}</span>
+          <div class="pick-name">${esc(s.whats_happening)}</div>
+        </div>
+        <span class="confidence-badge conf-${esc(s.confidence.level)}"
+              title="${esc(s.confidence.note)}">
+          confidence: ${esc(s.confidence.level)}</span>
+      </div>
+      <p><strong>Bull case:</strong> ${esc(s.bull_case)}</p>
+      <p class="scan-bottom"><strong>Counter-case:</strong> ${esc(s.counter_case)}</p>
+      <div class="dd-block"><strong>Risks</strong>
+        <ul>${s.risks.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>
+      <div class="lab-sources">${s.sources.map((src) => `
+        <a class="filing-link" href="${esc(safeUrl(src.link))}" target="_blank" rel="noopener">
+          ${esc(src.title)}${src.source ? " · " + esc(src.source) : ""} →</a>`).join("")}</div>
+      <p class="fine-print">Idea to research — not investment advice.</p>
+    </div>`).join("");
+
+  box.innerHTML = cards ||
+    `<p class="status-line">${esc(data.note) || "No setups currently in play."}</p>`;
+}
+
+function renderLabStrategies() {
+  const box = document.getElementById("lab-strategies");
+  if (!labStrategies.length) {
+    box.innerHTML = `<p class="status-line">No strategies yet — write one, or press “Brainstorm ideas”.</p>`;
+    return;
+  }
+  box.innerHTML = labStrategies.map((s) => `
+    <div class="scan-card" data-id="${esc(s.id)}">
+      <div class="scan-head">
+        <div>
+          <span class="pick-symbol">${esc(s.name)}</span>
+          <span class="lab-badge ${s.origin === "ai" ? "ai" : "mine"}">
+            ${s.origin === "ai" ? "AI" : "MINE"}</span>
+          <div class="pick-name">${esc(s.description)}</div>
+        </div>
+        <div class="btn-row">
+          <button class="mini-btn lab-edit-btn">Edit</button>
+          <button class="mini-btn lab-delete-btn">Delete</button>
+        </div>
+      </div>
+      ${s.entry_trigger ? `<p><strong>Entry:</strong> ${esc(s.entry_trigger)}</p>` : ""}
+      ${s.exit_trigger ? `<p><strong>Exit:</strong> ${esc(s.exit_trigger)}</p>` : ""}
+      ${s.assets.length ? `<p><strong>Assets:</strong> ${s.assets.map(esc).join(", ")}</p>` : ""}
+      ${s.risk_notes ? `<p><strong>Risk notes:</strong> ${esc(s.risk_notes)}</p>` : ""}
+      <div class="lab-tags">${s.tags.map((t) => `<span class="flag-tag">${esc(t)}</span>`).join("")}</div>
+    </div>`).join("");
+
+  box.querySelectorAll(".lab-edit-btn").forEach((btn) =>
+    btn.addEventListener("click", (e) => {
+      const id = e.target.closest(".scan-card").dataset.id;
+      openLabForm(labStrategies.find((s) => s.id === id));
+    }));
+  box.querySelectorAll(".lab-delete-btn").forEach((btn) =>
+    btn.addEventListener("click", async (e) => {
+      const id = e.target.closest(".scan-card").dataset.id;
+      const s = labStrategies.find((x) => x.id === id);
+      if (!confirm(`Delete the strategy “${s.name}”?`)) return;
+      const res = await fetch(`/api/lab/strategies/${id}`, { method: "DELETE" });
+      if ((await res.json()).status === "ok") loadLab();
+    }));
+}
+
+document.getElementById("lab-new-btn").addEventListener("click", () => openLabForm(null));
+
+function openLabForm(strategy) {
+  labEditingId = strategy ? strategy.id : null;
+  const box = document.getElementById("lab-strategy-form");
+  box.hidden = false;
+  box.className = "scan-card lab-form";
+  box.innerHTML = `
+    <h3 class="subheading">${strategy ? "Edit strategy" : "New strategy"}</h3>
+    <label>Name</label>
+    <input id="lab-f-name" value="${esc(strategy ? strategy.name : "")}">
+    <label>Description (plain English)</label>
+    <textarea id="lab-f-description">${esc(strategy ? strategy.description : "")}</textarea>
+    <label>Entry trigger — what would make you consider buying</label>
+    <input id="lab-f-entry" value="${esc(strategy ? strategy.entry_trigger : "")}">
+    <label>Exit trigger — what would make you consider selling</label>
+    <input id="lab-f-exit" value="${esc(strategy ? strategy.exit_trigger : "")}">
+    <label>Affected assets/sectors (comma-separated)</label>
+    <input id="lab-f-assets" value="${esc(strategy ? strategy.assets.join(", ") : "")}">
+    <label>Risk notes</label>
+    <textarea id="lab-f-risks">${esc(strategy ? strategy.risk_notes : "")}</textarea>
+    <label>Tags (comma-separated)</label>
+    <input id="lab-f-tags" value="${esc(strategy ? strategy.tags.join(", ") : "")}">
+    <div class="btn-row">
+      <button id="lab-f-save" class="action-btn">Save</button>
+      <button id="lab-f-cancel" class="action-btn ghost-btn">Cancel</button>
+    </div>`;
+  box.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  document.getElementById("lab-f-cancel").addEventListener("click", closeLabForm);
+  document.getElementById("lab-f-save").addEventListener("click", saveLabForm);
+}
+
+function closeLabForm() {
+  const box = document.getElementById("lab-strategy-form");
+  box.hidden = true;
+  box.innerHTML = "";
+  labEditingId = null;
+}
+
+function _splitList(value) {
+  return value.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+async function saveLabForm() {
+  const fields = {
+    name: document.getElementById("lab-f-name").value,
+    description: document.getElementById("lab-f-description").value,
+    entry_trigger: document.getElementById("lab-f-entry").value,
+    exit_trigger: document.getElementById("lab-f-exit").value,
+    assets: _splitList(document.getElementById("lab-f-assets").value),
+    risk_notes: document.getElementById("lab-f-risks").value,
+    tags: _splitList(document.getElementById("lab-f-tags").value),
+  };
+  const url = labEditingId ? `/api/lab/strategies/${labEditingId}` : "/api/lab/strategies";
+  const res = await fetch(url, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields),
+  });
+  const data = await res.json();
+  if (data.status === "ok") {
+    closeLabForm();
+    loadLab();
+  } else {
+    labJournalStatus.textContent = "⚠ " + data.message;
+  }
+}
+
+document.getElementById("lab-brainstorm-btn").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  labJournalStatus.textContent = "Asking the AI for new patterns — takes a few seconds…";
+  try {
+    const res = await fetch("/api/lab/brainstorm", { method: "POST" });
+    const data = await res.json();
+    if (data.status === "ok") {
+      const n = data.strategies.length;
+      labJournalStatus.textContent =
+        n ? `Added ${n} new AI-suggested pattern${n === 1 ? "" : "s"}.`
+          : "The AI didn't return any usable suggestions this time — try again.";
+      loadLab();
+    } else {
+      labJournalStatus.textContent = "⚠ " + data.message;
+    }
+  } catch (err) {
+    labJournalStatus.textContent = "⚠ Could not reach the server: " + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+loadLab();

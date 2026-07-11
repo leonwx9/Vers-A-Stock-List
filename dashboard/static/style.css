@@ -608,6 +608,59 @@ html { scroll-behavior: smooth; }
 .excluded-list summary { cursor: pointer; }
 .excluded-list ul { margin: 0.5rem 0 0 1.25rem; }
 
+/* ── Strategy Lab (event-timing patterns; ideas to research, not advice) */
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+/* MINE vs AI badge on a journal entry — permanent, never editable. */
+.lab-badge {
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+.lab-badge.mine { background: var(--accent-soft); color: var(--accent-dark); }
+.lab-badge.ai { background: var(--control-bg); color: var(--ink-soft); }
+
+/* Confidence is a warning-grade fact, not a win — ink tones, not green,
+   with darker ink meaning MORE confidence (i.e. more worth a hard look). */
+.confidence-badge {
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+}
+.confidence-badge.conf-low { color: var(--ink-soft); }
+.confidence-badge.conf-medium { color: var(--ink); border-color: var(--ink-soft); }
+.confidence-badge.conf-high { background: var(--ink); color: var(--paper); }
+
+.lab-sources { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.2rem; }
+
+/* The New/Edit strategy form — a card of stacked inputs. */
+.lab-form input, .lab-form textarea {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: 0.88rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.6rem;
+  background: var(--paper-dim);
+  resize: vertical;
+}
+.lab-form textarea { min-height: 3.5rem; }
+.lab-form label { display: block; font-size: 0.78rem; color: var(--ink-soft); margin-bottom: 0.2rem; }
+
 /* ── The trade log (paper portfolio) ───────────────────────────────── */
 .trade-log {
   border: 1px solid var(--line);

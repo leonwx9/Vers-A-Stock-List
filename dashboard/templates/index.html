@@ -23,7 +23,7 @@
 
   <header class="site-header">
     <a class="wordmark" href="/">Vers A</a>
-    <span class="header-note">Stock Searcher &amp; AI Pivot Scanner · paper trading only · no investment advice</span>
+    <span class="header-note">Stock Searcher &amp; Event Scanner · paper trading only · no investment advice</span>
     <button id="theme-btn" class="theme-btn" title="Switch to dark mode">☾</button>
   </header>
 
@@ -34,7 +34,7 @@
     <a class="side-link" href="#watchlists">Watchlists</a>
     <a class="side-link" href="#stock-searcher">Shortlist</a>
     <a class="side-link" href="#portfolio">Paper Portfolio</a>
-    <a class="side-link" href="#pivot-scanner">AI Pivot Scanner</a>
+    <a class="side-link" href="#pivot-scanner">Event Scanner</a>
   </nav>
 
   <main>
@@ -121,17 +121,60 @@
       <div id="pf-sell-decisions"></div>
     </section>
 
-    <!-- ── Section 3: the AI Pivot Scanner ───────────────────────────── -->
+    <!-- ── Section 3: Event Scanner (AI Pivots / Strategy Lab) ───────── -->
     <section class="panel" id="pivot-scanner">
       <div class="panel-header">
         <div>
-          <h2>AI Pivot Scanner</h2>
-          <p class="panel-subtitle">Small-cap non-tech companies newly disclosing AI pivots · SEC EDGAR · skeptical analysis</p>
+          <h2>Event Scanner</h2>
+          <p class="panel-subtitle" id="scanner-subtitle">Small-cap non-tech companies newly disclosing AI pivots · SEC EDGAR · skeptical analysis</p>
         </div>
-        <button id="scan-btn" class="action-btn">Scan EDGAR</button>
+        <div class="btn-row">
+          <!-- Switches between the two views below; remembers your choice. -->
+          <div class="seg-group" id="scanner-view-group">
+            <button class="seg active" data-view="pivots">AI Pivots</button>
+            <button class="seg" data-view="lab">Strategy Lab</button>
+          </div>
+          <button id="scan-btn" class="action-btn">Scan EDGAR</button>
+        </div>
       </div>
-      <p id="scanner-status" class="status-line"></p>
-      <div id="scanner-results"></div>
+
+      <!-- ── AI Pivot Scanner (EDGAR filings) ─────────────────────────── -->
+      <div id="pivot-view">
+        <p id="scanner-status" class="status-line"></p>
+        <div id="scanner-results"></div>
+      </div>
+
+      <!-- ── Strategy Lab: event-timing patterns to RESEARCH, never
+           advice, and never able to place even a pretend trade. ───────── -->
+      <div id="lab-view" hidden>
+        <p class="fine-print">Ideas to research, not investment advice — no automated or real trading.</p>
+
+        <div class="panel-header" style="margin-top:0.5rem">
+          <h3 class="subheading">Active setups
+            <span class="hint">news checked on demand — most days, nothing matches</span></h3>
+          <div class="btn-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="lab-daily-toggle">
+              Auto-scan once a day (~1-2¢/day)
+            </label>
+            <button id="lab-scan-btn" class="action-btn">Scan now</button>
+          </div>
+        </div>
+        <p id="lab-scan-status" class="status-line"></p>
+        <div id="lab-setups"></div>
+
+        <div class="panel-header" style="margin-top:1.5rem">
+          <h3 class="subheading">My journal
+            <span class="hint">your own event-timing strategy ideas</span></h3>
+          <div class="btn-row">
+            <button id="lab-brainstorm-btn" class="action-btn ghost-btn">Brainstorm ideas</button>
+            <button id="lab-new-btn" class="action-btn">New strategy</button>
+          </div>
+        </div>
+        <p id="lab-journal-status" class="status-line"></p>
+        <div id="lab-strategy-form" hidden></div>
+        <div id="lab-strategies"></div>
+      </div>
     </section>
   </main>
 
