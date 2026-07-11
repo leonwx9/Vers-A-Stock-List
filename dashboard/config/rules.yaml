@@ -34,3 +34,10 @@ scanner:
   excluded_sectors: [Technology]  # non-tech companies only
   lookback_days: 30           # how recent a disclosure must be to count
   max_candidates: 8           # filings examined per scan (each costs 1 AI request)
+
+# Event Strategy Lab rules — information only, never trades. See HANDOVER.md.
+lab:
+  max_queries: 8              # news searches per scan (one per strategy tag)
+  headlines_per_query: 6      # headlines fetched per search
+  max_headlines: 40           # cap on what one scan feeds the AI (cost control)
+  brainstorm_count: 4         # new pattern suggestions per "Brainstorm" press

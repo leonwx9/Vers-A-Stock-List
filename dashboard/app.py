@@ -23,7 +23,7 @@ import os
 import secrets
 import threading
 import time
-from datetime import timedelta
+from datetime import date, timedelta
 
 from dotenv import load_dotenv
 from flask import (Flask, abort, jsonify, redirect, render_template, request,
@@ -33,6 +33,7 @@ load_dotenv()  # read .env so the password/keys below are available
 
 from dashboard.analysis import deep_dive, searcher
 from dashboard.config_loader import load_rules
+from dashboard.datasources.events_source import EventNewsSource
 from dashboard.datasources.live_source import LiveSource
 from dashboard.datasources.news_source import GoogleNewsSource
 from dashboard.datasources.sample_source import SampleSource
@@ -41,6 +42,9 @@ from dashboard.llm.provider import MissingKeyError, get_provider
 from dashboard.portfolio.engine import PaperPortfolio
 from dashboard.scanner import pivot_scanner
 from dashboard.scanner.edgar import EdgarClient
+from dashboard.strategy_lab import brainstorm as lab_brainstorm
+from dashboard.strategy_lab import setup_scanner
+from dashboard.strategy_lab.journal import StrategyJournal
 from dashboard.watchlists.store import WatchlistStore
 
 app = Flask(__name__)
@@ -112,6 +116,12 @@ news = GoogleNewsSource()
 watchlists = WatchlistStore()
 portfolio = PaperPortfolio(prices, flags_source=watchlists.flags_by_symbol)
 edgar = EdgarClient()
+# The Strategy Lab: Leon's own event-timing journal, an AI brainstorm
+# helper, and a news-based setup scanner. Deliberately walled off from
+# the portfolio/scanner/analysis code above — it can inform Leon, but it
+# has no way to place even a pretend trade.
+events_source = EventNewsSource()
+journal = StrategyJournal()
 
 # One paid run at a time. A Lock is a turnstile: the first request through
 # holds it until done; anyone else gets a clear "already running" answer
@@ -120,6 +130,7 @@ edgar = EdgarClient()
 # wouldn't know about that.
 analysis_lock = threading.Lock()
 scan_lock = threading.Lock()
+lab_lock = threading.Lock()
 
 
 def find_asset(symbol):
@@ -285,6 +296,147 @@ def api_scan():
         scan_lock.release()
 
     return jsonify({"status": "ok", **result})
+
+
+
+# ── Event Strategy Lab ───────────────────────────────────────────────────
+# Ideas to research, never advice — see strategy_lab/ for the full rules.
+
+@app.route("/api/lab")
+def api_lab():
+    """Strategies, the latest scan, and settings — one call for the whole
+    Strategy Lab. If the once-daily auto-scan is turned on and hasn't run
+    yet today, kicks one off in a background thread so the page never
+    waits on it."""
+    settings = setup_scanner.load_settings()
+    today = date.today().isoformat()
+    daily_scan_started = False
+
+    if settings.get("daily_scan") and settings.get("last_auto_scan_date") != today:
+        try:
+            get_provider()  # only bother if a key is actually configured
+        except MissingKeyError:
+            pass
+        else:
+            # Mark today as done BEFORE starting the thread — a second
+            # request landing a moment later (another tab) then sees
+            # last_auto_scan_date already == today and won't also fire
+            # one. (The cloud's two separate worker processes could each
+            # still slip through once — worst case one extra ~1-2c scan a
+            # day; not worth extra machinery to prevent.)
+            settings["last_auto_scan_date"] = today
+            setup_scanner.save_settings(settings)
+            daily_scan_started = True
+
+            def _run_daily_scan():
+                if not lab_lock.acquire(blocking=False):
+                    return  # Leon is already scanning by hand — skip today's auto one
+                try:
+                    setup_scanner.run_scan(get_provider(), events_source,
+                                           journal, load_rules())
+                except Exception:
+                    pass  # a failed background scan just means try again tomorrow
+                finally:
+                    lab_lock.release()
+
+            threading.Thread(target=_run_daily_scan, daemon=True).start()
+
+    return jsonify({
+        "status": "ok",
+        "strategies": journal.list(),
+        "setups": setup_scanner.load_latest(),
+        "settings": settings,
+        "daily_scan_running": daily_scan_started,
+    })
+
+
+@app.route("/api/lab/strategies", methods=["POST"])
+def api_lab_create_strategy():
+    """Add a strategy to Leon's own journal. Always badged origin='leon'
+    — the browser never gets to choose that."""
+    body = request.get_json(silent=True) or {}
+    try:
+        strategy = journal.create(body, origin="leon")
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    return jsonify({"status": "ok", "strategy": strategy})
+
+
+@app.route("/api/lab/strategies/<strategy_id>", methods=["POST", "DELETE"])
+def api_lab_update_strategy(strategy_id):
+    """POST edits a strategy's own fields (its MINE/AI badge never
+    changes); DELETE removes it."""
+    try:
+        if request.method == "DELETE":
+            journal.delete(strategy_id)
+            return jsonify({"status": "ok"})
+        body = request.get_json(silent=True) or {}
+        strategy = journal.update(strategy_id, body)
+        return jsonify({"status": "ok", "strategy": strategy})
+    except KeyError:
+        return jsonify({"status": "error", "message": "Unknown strategy"}), 404
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+
+@app.route("/api/lab/brainstorm", methods=["POST"])
+def api_lab_brainstorm():
+    """Ask the AI for new event-timing patterns, built on Leon's existing
+    journal. One AI request; results are saved badged origin='ai'."""
+    try:
+        provider = get_provider()
+    except MissingKeyError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    if not lab_lock.acquire(blocking=False):
+        return jsonify({"status": "error",
+                        "message": "The Lab is already busy — wait for it "
+                                   "to finish."}), 409
+    try:
+        created = lab_brainstorm.run_brainstorm(provider, journal, load_rules())
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Brainstorm failed: {e}"}), 500
+    finally:
+        lab_lock.release()
+
+    return jsonify({"status": "ok", "strategies": created})
+
+
+@app.route("/api/lab/scan", methods=["POST"])
+def api_lab_scan():
+    """Fetch current event headlines and ask, in ONE AI request, whether
+    any saved strategy pattern looks like it's currently in play."""
+    try:
+        provider = get_provider()
+    except MissingKeyError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    if not lab_lock.acquire(blocking=False):
+        return jsonify({"status": "error",
+                        "message": "The Lab is already busy — wait for it "
+                                   "to finish."}), 409
+    try:
+        result = setup_scanner.run_scan(provider, events_source, journal, load_rules())
+    except RuntimeError as e:
+        # Our own friendly messages (no strategies yet; news feed down).
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Scan failed: {e}"}), 500
+    finally:
+        lab_lock.release()
+
+    return jsonify({"status": "ok", **result})
+
+
+@app.route("/api/lab/settings", methods=["POST"])
+def api_lab_settings():
+    """{"daily_scan": bool} — turn the once-a-day automatic scan on/off."""
+    body = request.get_json(silent=True) or {}
+    settings = setup_scanner.load_settings()
+    if "daily_scan" in body:
+        settings["daily_scan"] = bool(body["daily_scan"])
+    setup_scanner.save_settings(settings)
+    return jsonify({"status": "ok", "settings": settings})
 
 
 @app.route("/api/portfolio")
