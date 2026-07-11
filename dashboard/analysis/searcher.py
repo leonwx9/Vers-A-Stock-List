@@ -2,14 +2,23 @@
 searcher.py — the Stock Searcher engine.
 
 One "run" does this:
-  1. Load the universe (config/universe.yaml) and get prices for every ticker.
+  1. Load the universe (config/universe.yaml, or a watchlist) and get
+     prices for every ticker — PLUS every stock the paper portfolio
+     currently holds, even ones outside this run's scope, because a
+     position must never go unreviewed just because its watchlist wasn't
+     the one analysed today.
   2. Send the tickers to Claude in small batches, asking for a bull case,
-     bear case, verdict, conviction score (1-10), stop-loss note and
-     timeframe for each — as strict JSON we can parse.
+     bear case, verdict, conviction score (1-10), a stop-loss %, an entry
+     price, and — for currently-held stocks — a HOLD/SELL decision.
   3. Rank everything by conviction and shortlist the top picks
-     (excluding leveraged/inverse/volatility products, per rules.yaml).
+     (excluding leveraged/inverse/volatility products and anything the
+     AI itself calls a bear case, per rules.yaml).
   4. Save the result: a JSON file the web page reads, plus a dated
      markdown file in picks/ as the audit trail CLAUDE.md asks for.
+
+The portfolio no longer buys/sells instantly from this result — see
+dashboard/portfolio/engine.py's place_orders()/process_fills() for how a
+shortlist here turns into pending orders that fill on their own later.
 """
 
 import json
@@ -35,14 +44,29 @@ Analyze each security below for a short-term (weeks) paper-trading strategy.
 
 {price_note}
 
+Securities marked "CURRENTLY HELD" are already owned in the paper portfolio.
+For those, decide HOLD or SELL now — put your reasoning in bull (the case for
+holding) / bear (the case for selling) as usual. For securities NOT currently
+held, always set "action" to "n/a".
+
 For EACH security return one JSON object with exactly these keys:
-  "ticker":     the symbol, unchanged
-  "bull":       strongest case FOR buying now (1-2 sentences)
-  "bear":       strongest case AGAINST (1-2 sentences)
-  "verdict":    "bull" or "bear" — which side wins and why is implied by conviction
-  "conviction": integer 1-10 (10 = highest confidence it performs)
-  "stop_loss":  short exit note, e.g. "consider exiting if down >10% from entry"
-  "timeframe":  approximate profit window, e.g. "2-4 weeks"
+  "ticker":        the symbol, unchanged
+  "bull":          strongest case FOR buying/holding now (1-2 sentences)
+  "bear":          strongest case AGAINST (1-2 sentences)
+  "verdict":       "bull" or "bear" — which side wins and why is implied by conviction
+  "conviction":    integer 1-10 (10 = highest confidence it performs)
+  "stop_loss":     short human-readable exit note, e.g. "exit if down >12%"
+  "stop_loss_pct": integer {slp_min}-{slp_max} — the % drop from entry at which
+                   THIS security should be automatically sold. Tailor it to how
+                   volatile the security is: a steady blue-chip might warrant a
+                   number near {slp_min}, a volatile small-cap nearer {slp_max}.
+  "timeframe":     approximate profit window, e.g. "2-4 weeks"
+  "entry_price":   the price you would actually place a BUY order at — a
+                   realistic level reachable within the next 1-2 trading
+                   sessions (at or slightly below the current price). Give
+                   your genuine best number even for securities you wouldn't
+                   personally shortlist.
+  "action":        "hold", "sell", or "n/a" (see the CURRENTLY HELD note above)
 
 Respond with a JSON array containing one object per security, same order.
 
@@ -50,26 +74,37 @@ Securities:
 {securities}"""
 
 
-def _format_batch(assets, quotes):
-    """Turn a batch of assets + their quotes into the text block for the prompt."""
+def _format_batch(assets, quotes, holdings):
+    """Turn a batch of assets + their quotes into the text block for the
+    prompt. `holdings` is {symbol: avg_cost} — stocks the portfolio already
+    owns get a "CURRENTLY HELD" marker so the AI knows to judge hold vs sell."""
     lines = []
     for asset in assets:
-        q = quotes[asset["symbol"]]
+        symbol = asset["symbol"]
+        q = quotes[symbol]
         flags = f" [{', '.join(asset['flags'])}]" if asset["flags"] else ""
+        held_note = (f" — CURRENTLY HELD at ${holdings[symbol]:.2f} avg cost"
+                    if symbol in holdings else "")
         lines.append(
-            f"- {asset['symbol']} ({asset['name']}, {asset['type']}{flags}): "
+            f"- {symbol} ({asset['name']}, {asset['type']}{flags}){held_note}: "
             f"price ${q['price']}, 5-day {q['change_5d_pct']:+}%, "
             f"30-day {q['change_30d_pct']:+}%"
         )
     return "\n".join(lines)
 
 
-def parse_batch_response(text, expected_tickers):
-    """Pull the JSON array out of the AI's reply and sanity-check it.
+def parse_batch_response(text, expected_tickers, current_prices=None,
+                         default_stop_loss_pct=10, stop_loss_pct_min=5,
+                         stop_loss_pct_max=25):
+    """Pull the JSON array out of the AI's reply and sanity-check every
+    field — models occasionally slip (a dropped decimal, a stray word
+    where a number belongs), and this is the one place that protects the
+    rest of the app from trusting a bad value.
 
-    Models sometimes wrap JSON in ```json fences — strip those before parsing.
+    current_prices — {ticker: price}, used to sanity-check entry_price.
     Returns a dict keyed by ticker, containing only the tickers we asked about.
     """
+    current_prices = current_prices or {}
     cleaned = re.sub(r"```(?:json)?", "", text).strip()
     # Grab from the first "[" to the last "]" in case any stray text remains.
     start, end = cleaned.find("["), cleaned.rfind("]")
@@ -82,23 +117,58 @@ def parse_batch_response(text, expected_tickers):
         ticker = item.get("ticker")
         if ticker not in expected_tickers:
             continue  # ignore anything we didn't ask about
-        # Force conviction into a safe 1-10 integer even if the model strays.
-        # A non-number (e.g. "high") becomes the minimum score rather than
+
+        # Conviction: force into a safe 1-10 integer even if the model
+        # strays (e.g. "high") — becomes the minimum score rather than
         # crashing the whole (paid) run over one bad field.
         try:
             conviction = int(float(item.get("conviction", 1)))
         except (TypeError, ValueError):
             conviction = 1
         item["conviction"] = max(1, min(10, conviction))
-        # Normalise the verdict ("Bull", " BEAR " → "bull"/"bear") so the
-        # shortlist check below can rely on it.
+
+        # Verdict: normalise messy casing/whitespace ("Bull " → "bull").
         item["verdict"] = str(item.get("verdict", "")).strip().lower()
+
+        # Action: only "hold"/"sell" are meaningful; anything else (a typo,
+        # a missing field, or the model's own "n/a" for a non-held stock)
+        # becomes "n/a" — the safe default, since "n/a" triggers no order.
+        action = str(item.get("action", "")).strip().lower()
+        item["action"] = action if action in ("hold", "sell") else "n/a"
+
+        # Stop-loss %: clamp into the configured band; anything invalid
+        # falls back to the portfolio-wide default rather than block a buy
+        # over one malformed number.
+        try:
+            slp = float(item.get("stop_loss_pct"))
+            if not (stop_loss_pct_min <= slp <= stop_loss_pct_max):
+                slp = default_stop_loss_pct
+        except (TypeError, ValueError):
+            slp = default_stop_loss_pct
+        item["stop_loss_pct"] = slp
+
+        # Entry price: only trust it if it's within a sane band around the
+        # CURRENT price (85%-102%). A formatting slip (a dropped decimal, a
+        # stale training-data price) outside that band means we skip
+        # placing an order for this pick entirely — never clamp or
+        # silently substitute a number the AI never actually reasoned
+        # about; a garbage number means we don't trade on that pick.
+        entry_price = None
+        current = current_prices.get(ticker)
+        try:
+            candidate = float(item.get("entry_price"))
+            if current and 0.85 * current <= candidate <= 1.02 * current:
+                entry_price = round(candidate, 2)
+        except (TypeError, ValueError):
+            pass
+        item["entry_price"] = entry_price  # None → no buy order this run
+
         results[ticker] = item
     return results
 
 
 def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
-                 scope_name=None):
+                 scope_name=None, holdings=None):
     """Run one full analysis. Returns the result dict (also saved to disk).
 
     provider — an LLM provider (from llm.provider.get_provider())
@@ -107,10 +177,21 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
     on_progress — optional callback(batches_done, batches_total)
     scope_name — label for WHAT was analysed (e.g. one watchlist's name),
                  recorded in the result so the page can say so
+    holdings — optional {symbol: avg_cost} for stocks the paper portfolio
+               currently owns. Every held symbol gets a HOLD/SELL review
+               (its own row must already be present in `universe` — the
+               caller is responsible for adding any held-but-out-of-scope
+               stock there first, so this function stays unaware of
+               watchlists). The result's "held_reviews" key collects the
+               outcome for the portfolio engine to act on.
     """
     universe = universe or load_universe()
     rules = rules or load_rules()
+    holdings = holdings or {}
     batch_size = rules["analysis"]["batch_size"]
+    slp_min = rules["portfolio"].get("stop_loss_pct_min", 5)
+    slp_max = rules["portfolio"].get("stop_loss_pct_max", 25)
+    default_slp = rules["portfolio"].get("stop_loss_pct", 10)
 
     # Tell the AI honestly what kind of prices it's looking at.
     data_source = rules.get("data", {}).get("price_source", "sample")
@@ -136,16 +217,22 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
 
     batch_errors = []
 
+    current_prices = {symbol: q["price"] for symbol, q in quotes.items()}
+
     def analyze_batch(batch):
         tickers = {a["symbol"] for a in batch}
-        prompt = BATCH_PROMPT.format(price_note=price_note,
-                                     securities=_format_batch(batch, quotes))
+        prompt = BATCH_PROMPT.format(
+            price_note=price_note, slp_min=slp_min, slp_max=slp_max,
+            securities=_format_batch(batch, quotes, holdings))
         # One bad batch (provider hiccup, malformed reply) must not sink the
         # whole run — the other batches are already paid for. Its tickers
         # fall back to the honest "(no analysis returned)" rows below.
         try:
             reply = provider.complete(SYSTEM_PROMPT, prompt)
-            return parse_batch_response(reply, tickers)
+            return parse_batch_response(reply, tickers, current_prices=current_prices,
+                                        default_stop_loss_pct=default_slp,
+                                        stop_loss_pct_min=slp_min,
+                                        stop_loss_pct_max=slp_max)
         except Exception as e:
             batch_errors.append(e)
             return {}
@@ -173,9 +260,11 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
         row.update(analyses.get(symbol, {
             "bull": "(no analysis returned)", "bear": "(no analysis returned)",
             "verdict": "bear", "conviction": 1,
-            "stop_loss": "n/a", "timeframe": "n/a",
+            "stop_loss": "n/a", "stop_loss_pct": default_slp,
+            "timeframe": "n/a", "entry_price": None, "action": "n/a",
         }))
         rows.append(row)
+    by_symbol = {r["symbol"]: r for r in rows}
 
     # 4. Shortlist: highest conviction first, skipping risk-flagged products
     #    and anything whose own analysis says the BEAR side wins — a high
@@ -186,6 +275,19 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
     eligible.sort(key=lambda r: r["conviction"], reverse=True)
     shortlist = [r["symbol"] for r in eligible[: rules["portfolio"]["shortlist_size"]]]
 
+    # 5. Every currently-held stock gets its HOLD/SELL verdict collected
+    #    here, for the portfolio engine to turn into a sell order (or not).
+    held_reviews = {}
+    for symbol in holdings:
+        row = by_symbol.get(symbol)
+        if not row or row.get("action") not in ("hold", "sell"):
+            continue
+        # bull = the case for holding; bear = the case for selling — the
+        # same fields the shortlist debate already produces, reused here
+        # rather than asking the AI for a third, redundant explanation.
+        reason = row["bull"] if row["action"] == "hold" else row["bear"]
+        held_reviews[symbol] = {"action": row["action"], "reason": reason}
+
     result = {
         "run_at": datetime.now().isoformat(timespec="seconds"),
         "data_source": data_source,
@@ -193,6 +295,7 @@ def run_analysis(provider, source, universe=None, rules=None, on_progress=None,
         "batches_failed": len(batch_errors),
         "shortlist": shortlist,
         "rows": rows,
+        "held_reviews": held_reviews,
     }
 
     _save(result, rows, shortlist)
@@ -240,7 +343,9 @@ def _save(result, rows, shortlist):
             f"- Bull: {r['bull']}",
             f"- Bear: {r['bear']}",
             f"- Timeframe: {r['timeframe']}",
-            f"- Stop-loss: {r['stop_loss']}",
+            f"- Stop-loss: {r['stop_loss']} ({r.get('stop_loss_pct', '?')}%)",
+            f"- Planned entry price: "
+            f"{'$' + str(r['entry_price']) if r.get('entry_price') is not None else 'AI price rejected — no order placed'}",
             "",
             "### Trade journal (fill in later)",
             "- Executed: ☐ yes / ☐ no",

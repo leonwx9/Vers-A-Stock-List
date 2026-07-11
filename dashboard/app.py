@@ -189,7 +189,12 @@ def api_analysis():
 def api_run_analysis():
     """Run a fresh analysis of watchlisted stocks. The browser sends
     {"watchlist": <id>} to analyse ONE list, or "all" (the union of every
-    list). Searching/browsing is free — only what's here costs AI money."""
+    list). Searching/browsing is free — only what's here costs AI money.
+
+    Every currently-held stock ALSO gets reviewed for hold/sell, even if
+    it's outside this run's scope — a position never goes unreviewed just
+    because of which watchlist was chosen. The run then places pending
+    orders (see PaperPortfolio.place_orders); there is no more instant buy."""
     try:
         provider = get_provider()
     except MissingKeyError as e:
@@ -209,6 +214,18 @@ def api_run_analysis():
         except (KeyError, StopIteration):
             return jsonify({"status": "error",
                             "message": "That watchlist no longer exists."}), 404
+
+    # Pull in every currently-held stock this run's scope doesn't already
+    # cover, so it still gets a HOLD/SELL review this run.
+    positions = portfolio.current_positions()
+    universe_symbols = {a["symbol"] for a in universe}
+    for symbol in positions:
+        if symbol not in universe_symbols:
+            universe.append(watchlists.get_stock(symbol) or
+                            {"symbol": symbol, "name": symbol,
+                             "type": "stock", "flags": []})
+            universe_symbols.add(symbol)
+
     if not universe:
         return jsonify({"status": "error",
                         "message": "No stocks to analyse — add some to a "
@@ -219,14 +236,18 @@ def api_run_analysis():
                         "message": "An analysis is already running — wait "
                                    "for it to finish."}), 409
     try:
+        holdings_for_review = {s: p["avg_cost"] for s, p in positions.items()}
         result = searcher.run_analysis(provider, prices, universe=universe,
-                                       scope_name=scope_name)
+                                       scope_name=scope_name,
+                                       holdings=holdings_for_review)
+        orders = portfolio.place_orders(result["rows"], result["shortlist"],
+                                        result["held_reviews"])
     except Exception as e:
         return jsonify({"status": "error", "message": f"Analysis failed: {e}"}), 500
     finally:
         analysis_lock.release()
 
-    return jsonify({"status": "ok", **result})
+    return jsonify({"status": "ok", "orders_placed": orders, **result})
 
 
 @app.route("/api/scanner")
@@ -263,31 +284,11 @@ def api_scan():
 
 @app.route("/api/portfolio")
 def api_portfolio():
-    """The paper portfolio: value, holdings, history for the graph."""
+    """The paper portfolio: value, holdings, history, pending orders, and
+    the trade log. Every call settles any orders that have become due
+    against real trading sessions since the last look — self-updating,
+    no button required."""
     return jsonify({"status": "ok", **portfolio.summary()})
-
-
-@app.route("/api/portfolio/sync", methods=["POST"])
-def api_portfolio_sync():
-    """Make the paper portfolio mirror the latest shortlist."""
-    latest = searcher.load_latest()
-    if latest is None:
-        return jsonify({"status": "error",
-                        "message": "Run an analysis first — the portfolio "
-                                   "buys from the shortlist."}), 400
-    # Hand the engine each pick's conviction + bull case, so the trade log
-    # can say WHY every buy happened in plain English.
-    why = {r["symbol"]: f"on the shortlist — conviction {r['conviction']}/10; "
-                        f"bull case: {r['bull']}"
-           for r in latest["rows"] if r["symbol"] in latest["shortlist"]}
-    # If the run was scoped to ONE watchlist, tell the engine which symbols
-    # it actually analysed — holdings outside that scope must be left alone,
-    # not sold for "missing" a shortlist they were never considered for.
-    scoped = latest.get("scope", "all watchlists") != "all watchlists"
-    analyzed = [r["symbol"] for r in latest["rows"]] if scoped else None
-    trades = portfolio.sync_to_shortlist(latest["shortlist"], why=why,
-                                         analyzed=analyzed)
-    return jsonify({"status": "ok", "trades_made": trades, **portfolio.summary()})
 
 
 @app.route("/api/portfolio/reset", methods=["POST"])

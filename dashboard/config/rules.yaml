@@ -17,7 +17,12 @@ portfolio:
   # from this list to allow it again. (Decision from CLAUDE.md's Phase 2 reminder.)
   excluded_flags: [leveraged, inverse, volatility]
   shortlist_size: 5           # how many top picks make the shortlist
-  stop_loss_pct: 10           # auto-sell a holding once it's down this % from entry
+  # The AI chooses its own stop-loss % per stock (tailored to how volatile
+  # that stock is). stop_loss_pct below is only the FALLBACK — used when
+  # the AI's number is missing or outside [stop_loss_pct_min, _max].
+  stop_loss_pct: 10
+  stop_loss_pct_min: 5
+  stop_loss_pct_max: 25
 
 analysis:
   batch_size: 10              # tickers sent to the AI per request (fewer = slower + pricier)
