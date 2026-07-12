@@ -257,16 +257,55 @@
     proves a `null` AI-supplied counter_case can't slip past the guardrail
     as the literal string `"None"`. 117 tests total, all offline.
 
+- **Lab review fixes, the daily fill scheduler, and the Fix bulletin**
+  (2026-07-12, from a Fable 5 review of the Strategy Lab build; planned
+  in PLAN-fixes-scheduler-bulletin.md):
+  - Four fixes: the confidence note is now printed as visible text on a
+    setup card instead of a hover tooltip (which a phone can never show);
+    `derive_queries()` now collects tags ROUND-ROBIN across strategies
+    instead of strategy-by-strategy, so a journal grown past
+    `lab.max_queries` can't silently starve its oldest strategies of any
+    news search at all; the page now polls `/api/lab` a couple of times
+    after a background auto-scan starts, so the fresh result appears
+    without a manual reload; and the daily-scan checkbox now reverts
+    itself with a warning if saving the setting fails.
+  - Smarter once-a-day guard: `should_auto_scan()` / `ran_today()`
+    (`setup_scanner.py`) mean a scan Leon already ran BY HAND today
+    satisfies the daily rule too — the automatic scan no longer fires on
+    top of a manual one, and a background scan double-checks right
+    before spending anything in case the cloud's other worker just
+    finished one.
+  - **Daily order-fill scheduler** (`dashboard/scheduler.py`, new,
+    off by default): settles pending orders and records the day's
+    portfolio-graph point once Sydney time passes `rules.yaml`'s
+    `scheduler.fill_hour_sydney` (8am) — no AI involved, just the same
+    free `process_fills()`/`snapshot()` every page view already
+    triggers, guaranteed to happen once a day even if Leon doesn't open
+    the dashboard. Runs as a background thread started only from
+    `app.py`'s `__main__` block (never under gunicorn/Render — the cloud
+    copy resets on restart anyway, and a thread per worker could
+    double-fire). Toggle lives in the Paper Portfolio panel.
+  - **Fix bulletin** (`dashboard/bulletin.py`, new): a collapsible note
+    pinned to the right edge of the page, entirely Leon's own — plain
+    text with three simple markers (`**bold**`, `_underline_`, `- ` for a
+    dot point) rendered client-side. Seeded once with the review's own
+    known housekeeping items (the ever-growing scan-history file, the
+    malicious-headline risk, duplicate source links, the scheduler's
+    Mac-only reach) so they're not lost, then entirely Leon's to edit.
+  - 17 new tests (6 in `test_strategy_lab.py`, 7 in `test_scheduler.py`,
+    4 in `test_bulletin.py`). 134 tests total, all offline.
+
 ## Next
 - Leon: create the free Neon database and paste DATABASE_URL into Render
   (if not already done — makes the cloud copy's orders/positions/journal
   persist).
-- Phase 2 proper: scheduled runs (so orders place/fill even when the
-  dashboard isn't open) + a track-record panel (+ email?).
+- A track-record panel (+ 7am AEST email?) — the fill scheduler settles
+  orders daily now, but nothing summarizes performance over time yet.
 - Decide: feed news headlines into the batch analysis so bull/bear cases
   rest on more than momentum (costs a bit more per run).
 - Try the Strategy Lab: write a strategy (or press Brainstorm), then Scan
-  now to see whether current news matches it.
+  now to see whether current news matches it. Also try the Fix bulletin
+  (right-edge tab) and the new "settle orders daily" toggle.
 
 ## How to run
 ```

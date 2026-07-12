@@ -56,10 +56,26 @@ your portfolio history and picks live on the Mac (and in git).
    journal — every match shows what's happening, its sources, the bull
    case, the counter-case, the risks, and an honest confidence level.
    This is purely for research; nothing here can buy or sell anything,
-   pretend or real.
+   pretend or real. "Once a day" (the optional auto-scan toggle) means
+   the FIRST time you open the dashboard each day — there's no scheduler
+   for this part, so if you never open the app that day, no scan
+   happens; and pressing **Scan now** yourself any time that day counts
+   as the day's scan too, so the automatic one won't also fire on top of it.
 6. Click any ticker for its chart, statistics, news, and a "why this
    rating" deep dive (one AI request, then cached — press Refresh for a
    fresh one).
+7. **Settle orders daily** (checkbox in the Paper Portfolio panel, off by
+   default) — if you turn this on, pending orders settle themselves at
+   8am Sydney time even if you never open the dashboard that day, as
+   long as the Mac app itself is running. No AI cost — it's the exact
+   same free settling step every page view already does, just guaranteed
+   to happen once a day on its own.
+8. **Fix bulletin** (the tab pinned to the right edge of the page) — your
+   own running list of things to fix or revisit later. Press the tab to
+   open it, Edit to change it; the B/U/• buttons insert simple markers
+   (`**bold**`, `_underline_`, a dot point) into your own plain text. It
+   starts with a few housekeeping notes from the Strategy Lab's build —
+   edit or delete them like anything else you write there.
 
 The portfolio graph grows one point per day the app is used — it needs
 weeks of routine before it says anything meaningful. Because you check the
@@ -77,6 +93,8 @@ the same thing a real broker would tell you the next morning.
   default — turning it on adds ≈1-2¢/day, nothing until you flip it on.
 - Prices (Yahoo), filings (EDGAR), and news headlines are free. Render and
   Tailscale are on free tiers.
+- The daily **order-fill scheduler** and the **Fix bulletin** cost nothing
+  — neither one ever calls the AI.
 
 ## When something breaks
 
@@ -92,6 +110,8 @@ the same thing a real broker would tell you the next morning.
 | Scanner shows fewer results than expected | SEC throttled us (it retries politely) | run the scan again in a minute |
 | Strategy Lab scan finds nothing | normal and honest — genuine event-timing setups are rare on most days | not a bug; try again another day, or after big news |
 | A Lab strategy suggestion looks incomplete/never appears | the AI's suggestion was missing a required field (rare) | dropped automatically, not saved — press Brainstorm again |
+| "Settle orders daily" didn't fill something overnight | the Mac app wasn't running at 8am that day | no harm — it settles the moment you next open the dashboard, or automatically the next day the app is running |
+| Fix bulletin edit didn't save | a network hiccup while pressing Save | the status line under the note says so — try Save again |
 | Phone can't reach the Mac copy | Mac asleep or Tailscale off | wake the Mac, check the Tailscale menu-bar icon |
 | Cloud copy slow to load | free server waking up | wait ~50 s, it's normal |
 | Cloud copy forgot the portfolio | free server restarted | expected — the Mac copy remembers |
@@ -141,12 +161,13 @@ git add -A && git commit -m "what changed" && git push
 - Conviction scores are opinions, not predictions. The `picks/` audit trail
   exists precisely so you can check, months later, whether they were worth
   listening to.
-- **Orders only settle when you open the dashboard** — there's no
-  scheduler yet (that's a Phase 2 idea). If a session's price briefly
-  touched your planned entry hours ago while you were asleep, that's still
-  a real fill once you check — the check only ever looks at FINISHED
-  sessions, never a still-forming one, so opening the app mid-session (if
-  you ever travel, say) can't fill an order against a half-finished day.
+- **Orders settle when you open the dashboard, or once a day if you've
+  turned the scheduler on** — either way, the check only ever looks at
+  FINISHED trading sessions, never a still-forming one, so opening the
+  app mid-session (if you ever travel, say) can't fill an order against a
+  half-finished day. The scheduler only runs inside the Mac app's own
+  process — it can't fire if the app isn't running, and it never runs on
+  the cloud copy at all.
 - **The Strategy Lab is information-only, on purpose.** It cannot place
   an order — pretend or real — no matter what a scan finds; the module is
   built so it never even imports the code that could. A "setup" is a
@@ -155,7 +176,8 @@ git add -A && git commit -m "what changed" && git push
 ## Where the bodies are buried
 
 - Secrets: `.env` (never committed) and Render's Environment tab.
-- Saved runs, portfolio, & Strategy Lab journal/scans: `dashboard/data/`
+- Saved runs, portfolio, Strategy Lab journal/scans, the scheduler's own
+  setting, and the Fix bulletin's text: all in `dashboard/data/`
   (gitignored, Mac only — or the cloud database if DATABASE_URL is set).
 - Audit trail of every analysis: `picks/` (committed).
 - Build history & decisions: `PROGRESS.md`; project rules: `CLAUDE.md`.

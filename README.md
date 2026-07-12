@@ -25,6 +25,12 @@ A private dashboard that does four things:
    its counter-case, risks, sources, and an honest confidence level.
    **Ideas to research, never advice — no automated or real trading.**
 
+An optional **daily order-fill scheduler** (off by default) settles
+pending paper-trade orders each morning even if you don't open the
+dashboard — no AI involved, it's free. And a collapsible **Fix bulletin**
+(right edge of the page) is your own editable sticky note for future
+to-dos, with simple bold/underline/dot-point formatting.
+
 Everything is plain-English and beginner-readable on purpose — the code is
 the documentation.
 
@@ -84,6 +90,8 @@ never reach GitHub.
   - scanner rules: market-cap ceiling, excluded sectors, lookback days, …
   - `lab` rules: news searches per scan, headlines per search, the cap on
     what one scan feeds the AI, and how many patterns "Brainstorm" suggests
+  - `scheduler.fill_hour_sydney`: the Sydney hour after which the optional
+    daily order-fill run becomes due (only matters if you turn it on)
 
 ## Phone & cloud
 
@@ -99,7 +107,7 @@ never reach GitHub.
 
 ## Tests
 
-A suite of automated tests (117 and growing), all offline — external
+A suite of automated tests (134 and growing), all offline — external
 services are faked:
 
 ```bash
@@ -121,6 +129,8 @@ dashboard/
   scanner/             EDGAR client + the skeptical AI-pivot scanner
   strategy_lab/        journal + brainstorm + news-based setup scanner
                        (information only — never imports the portfolio)
+  scheduler.py         optional daily order-fill run (no AI, off by default)
+  bulletin.py          the Fix bulletin — Leon's own editable to-do note
   static/              CSS, JS, icons, vendored chart library
   templates/           the HTML pages
   data/                saved runs & portfolio state (gitignored)
