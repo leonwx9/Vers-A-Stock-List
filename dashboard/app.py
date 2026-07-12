@@ -39,6 +39,7 @@ from dashboard.datasources.news_source import GoogleNewsSource
 from dashboard.datasources.sample_source import SampleSource
 from dashboard.datasources.stock_search import search_stocks
 from dashboard.llm.provider import MissingKeyError, get_provider
+from dashboard import bulletin, scheduler
 from dashboard.portfolio.engine import PaperPortfolio
 from dashboard.scanner import pivot_scanner
 from dashboard.scanner.edgar import EdgarClient
@@ -305,14 +306,16 @@ def api_scan():
 @app.route("/api/lab")
 def api_lab():
     """Strategies, the latest scan, and settings — one call for the whole
-    Strategy Lab. If the once-daily auto-scan is turned on and hasn't run
-    yet today, kicks one off in a background thread so the page never
-    waits on it."""
+    Strategy Lab. If the once-daily auto-scan is turned on and NOTHING has
+    scanned today yet (automatic OR a manual "Scan now" — either satisfies
+    the daily rule), kicks one off in a background thread so the page
+    never waits on it."""
     settings = setup_scanner.load_settings()
     today = date.today().isoformat()
+    latest = setup_scanner.load_latest()
     daily_scan_started = False
 
-    if settings.get("daily_scan") and settings.get("last_auto_scan_date") != today:
+    if setup_scanner.should_auto_scan(settings, latest, today):
         try:
             get_provider()  # only bother if a key is actually configured
         except MissingKeyError:
@@ -332,6 +335,13 @@ def api_lab():
                 if not lab_lock.acquire(blocking=False):
                     return  # Leon is already scanning by hand — skip today's auto one
                 try:
+                    # The OTHER cloud worker may have just finished today's
+                    # scan while this thread waited for the lock — check
+                    # again right before spending anything. Shrinks the
+                    # double-fire race to near-impossible; doesn't need to
+                    # be perfect (worst case ~2c, harmless).
+                    if setup_scanner.ran_today(setup_scanner.load_latest(), today):
+                        return
                     setup_scanner.run_scan(get_provider(), events_source,
                                            journal, load_rules())
                 except Exception:
@@ -340,11 +350,17 @@ def api_lab():
                     lab_lock.release()
 
             threading.Thread(target=_run_daily_scan, daemon=True).start()
+    elif (settings.get("daily_scan") and settings.get("last_auto_scan_date") != today
+          and setup_scanner.ran_today(latest, today)):
+        # A manual "Scan now" already covered today — record that so the
+        # check above doesn't have to re-derive it on the next page view.
+        settings["last_auto_scan_date"] = today
+        setup_scanner.save_settings(settings)
 
     return jsonify({
         "status": "ok",
         "strategies": journal.list(),
-        "setups": setup_scanner.load_latest(),
+        "setups": latest,
         "settings": settings,
         "daily_scan_running": daily_scan_started,
     })
@@ -445,7 +461,8 @@ def api_portfolio():
     the trade log. Every call settles any orders that have become due
     against real trading sessions since the last look — self-updating,
     no button required."""
-    return jsonify({"status": "ok", **portfolio.summary()})
+    return jsonify({"status": "ok", **portfolio.summary(),
+                    "scheduler": scheduler.load_settings()})
 
 
 @app.route("/api/portfolio/reset", methods=["POST"])
@@ -453,6 +470,20 @@ def api_portfolio_reset():
     """Start the pretend portfolio over from fresh cash."""
     portfolio.reset()
     return jsonify({"status": "ok", **portfolio.summary()})
+
+
+@app.route("/api/scheduler", methods=["POST"])
+def api_scheduler_settings():
+    """{"enabled": bool} — turn the daily 8am order-fill run on/off. Free:
+    no AI is ever involved here, only settling orders that already have a
+    plan (the same process_fills()/snapshot() every page view already
+    triggers, just guaranteed to happen once a day on its own)."""
+    body = request.get_json(silent=True) or {}
+    settings = scheduler.load_settings()
+    if "enabled" in body:
+        settings["enabled"] = bool(body["enabled"])
+    scheduler.save_settings(settings)
+    return jsonify({"status": "ok", "scheduler": settings})
 
 
 @app.route("/api/ticker/<path:symbol>")
@@ -591,6 +622,24 @@ def api_deep_dive(symbol):
     return jsonify({"status": "ok", "deep_dive": result})
 
 
+# ── Fix bulletin: Leon's own editable list of future to-dos ──────────────
+# A sticky note, not configuration — nothing else in the app reads this.
+
+@app.route("/api/bulletin")
+def api_bulletin():
+    """The bulletin's saved text (seeded with known housekeeping items the
+    very first time it's ever loaded)."""
+    return jsonify({"status": "ok", **bulletin.load()})
+
+
+@app.route("/api/bulletin", methods=["POST"])
+def api_bulletin_save():
+    """{"text": str} — overwrite the bulletin with Leon's own edit."""
+    body = request.get_json(silent=True) or {}
+    text = bulletin.save(body.get("text", ""))
+    return jsonify({"status": "ok", "text": text})
+
+
 if __name__ == "__main__":
     # Port 5001 avoids clashing with macOS's own service on port 5000.
     #
@@ -603,6 +652,19 @@ if __name__ == "__main__":
     # code on this Mac from the browser, so it must never be reachable by
     # anything else on the network.
     debug = os.getenv("DASHBOARD_DEBUG", "").strip() == "1"
+
+    # The optional daily order-fill scheduler (rules.yaml → scheduler.fill_hour_sydney):
+    # settles pending orders and records the day's portfolio-graph point
+    # once Sydney time passes the configured hour, for as long as this Mac
+    # process keeps running. No AI call involved. In debug mode, Werkzeug's
+    # auto-reloader actually runs this file in TWO processes (a watcher and
+    # a worker) — only the real worker (which has WERKZEUG_RUN_MAIN set)
+    # should start the thread, or a debug run would end up with two
+    # schedulers ticking at once.
+    if not debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        fill_hour = load_rules().get("scheduler", {}).get("fill_hour_sydney", 8)
+        scheduler.start_scheduler_thread(portfolio, fill_hour=fill_hour)
+
     app.run(debug=debug,
             host="127.0.0.1" if debug else "0.0.0.0",
             port=5001)

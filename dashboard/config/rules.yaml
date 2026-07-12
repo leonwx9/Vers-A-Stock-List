@@ -41,3 +41,9 @@ lab:
   headlines_per_query: 6      # headlines fetched per search
   max_headlines: 40           # cap on what one scan feeds the AI (cost control)
   brainstorm_count: 4         # new pattern suggestions per "Brainstorm" press
+
+# Optional daily order-fill scheduler (off by default) — settles pending
+# paper-trade orders even if Leon doesn't open the dashboard that day. No
+# AI involved. Only runs while the Mac app itself is running — see HANDOVER.md.
+scheduler:
+  fill_hour_sydney: 8         # Sydney hour (24h) after which the daily run becomes due

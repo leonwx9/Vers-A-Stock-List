@@ -9,7 +9,8 @@ from dashboard.datasources.events_source import EventNewsSource
 from dashboard.strategy_lab.brainstorm import parse_brainstorm_response, run_brainstorm
 from dashboard.strategy_lab.journal import StrategyJournal
 from dashboard.strategy_lab.setup_scanner import (derive_queries,
-                                                  parse_scan_response, run_scan)
+                                                  parse_scan_response, ran_today,
+                                                  run_scan, should_auto_scan)
 
 RULES = {"lab": {"max_queries": 8, "headlines_per_query": 6,
                  "max_headlines": 40, "brainstorm_count": 4}}
@@ -108,6 +109,20 @@ def test_derive_queries_falls_back_to_name_when_untagged():
 def test_derive_queries_caps_at_max_queries():
     strategies = [{"name": "A", "tags": [f"tag{i}" for i in range(20)]}]
     assert len(derive_queries(strategies, max_queries=5)) == 5
+
+
+def test_derive_queries_round_robins_so_no_strategy_is_starved():
+    # A journal grown past max_queries must not let the newest strategies
+    # use up the whole budget while older ones get zero searches (and so
+    # can never show up in a scan again, silently).
+    strategies = [
+        {"name": "A", "tags": ["a1", "a2", "a3"]},
+        {"name": "B", "tags": ["b1", "b2", "b3"]},
+        {"name": "C", "tags": ["c1", "c2", "c3"]},
+    ]
+    result = derive_queries(strategies, max_queries=5)
+    assert result[:3] == ["a1", "b1", "c1"]  # every strategy gets a turn first
+    assert result == ["a1", "b1", "c1", "a2", "b2"]
 
 
 # ── parse_scan_response ───────────────────────────────────────────────────
@@ -330,6 +345,36 @@ def test_brainstorm_caps_at_the_configured_count(tmp_path):
     tight_rules = {"lab": {**RULES["lab"], "brainstorm_count": 2}}
     created = run_brainstorm(OverGenerousProvider(), journal, tight_rules)
     assert len(created) == 2
+
+
+# ── The once-a-day auto-scan guard ───────────────────────────────────────
+
+def test_should_auto_scan_off_by_default():
+    settings = {"daily_scan": False, "last_auto_scan_date": None}
+    assert not should_auto_scan(settings, None, "2026-07-12")
+
+
+def test_should_auto_scan_false_once_the_automatic_scan_already_ran_today():
+    settings = {"daily_scan": True, "last_auto_scan_date": "2026-07-12"}
+    assert not should_auto_scan(settings, None, "2026-07-12")
+
+
+def test_should_auto_scan_false_if_a_manual_scan_already_covered_today():
+    # Leon pressing "Scan now" himself satisfies the daily rule too — the
+    # automatic scan must not ALSO fire on top of it.
+    settings = {"daily_scan": True, "last_auto_scan_date": "2026-07-11"}
+    latest = {"run_at": "2026-07-12T09:00:00"}
+    assert not should_auto_scan(settings, latest, "2026-07-12")
+
+
+def test_should_auto_scan_true_when_enabled_and_nothing_ran_today():
+    settings = {"daily_scan": True, "last_auto_scan_date": "2026-07-11"}
+    latest = {"run_at": "2026-07-11T09:00:00"}
+    assert should_auto_scan(settings, latest, "2026-07-12")
+
+
+def test_ran_today_handles_no_scan_yet():
+    assert not ran_today(None, "2026-07-12")
 
 
 # ── Events source ─────────────────────────────────────────────────────────

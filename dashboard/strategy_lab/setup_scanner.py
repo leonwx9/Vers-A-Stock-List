@@ -28,6 +28,7 @@ module never imports the portfolio, scanner, or analysis code — the Lab
 cannot place a paper trade even by accident.
 """
 
+import itertools
 import json
 import re
 from datetime import datetime
@@ -80,19 +81,35 @@ Return ONE JSON object with exactly these keys:
 
 def derive_queries(strategies, max_queries):
     """Turn strategies into a deduped list of news search terms: each
-    strategy's own tags (in the order they appear), or its name if it has
-    no tags. Pure function so tests don't need a real journal or network.
+    strategy's own tags, or its name if it has no tags. Pure function so
+    tests don't need a real journal or network.
+
+    Collected ROUND-ROBIN — every strategy's FIRST tag before any
+    strategy's second — not strategy-by-strategy. With a journal that's
+    grown past max_queries, taking tags strategy-by-strategy would let the
+    newest strategies use up the whole budget, leaving older ones with
+    ZERO searches (and therefore no way to ever show up in a scan again,
+    silently). Round-robin guarantees every strategy gets at least one
+    query before any strategy gets a second.
     """
+    term_lists = [
+        [t.strip() for t in (strategy.get("tags") or [strategy["name"]]) if t.strip()]
+        for strategy in strategies
+    ]
+
     queries = []
     seen = set()
-    for strategy in strategies:
-        terms = strategy.get("tags") or [strategy["name"]]
-        for term in terms:
-            key = term.strip().lower()
-            if key and key not in seen:
+    for round_terms in itertools.zip_longest(*term_lists):
+        for term in round_terms:
+            if term is None:
+                continue
+            key = term.lower()
+            if key not in seen:
                 seen.add(key)
-                queries.append(term.strip())
-    return queries[:max_queries]
+                queries.append(term)
+                if len(queries) >= max_queries:
+                    return queries
+    return queries
 
 
 def _text(value):
@@ -264,3 +281,24 @@ def load_settings():
 
 def save_settings(settings):
     get_doc("lab_settings").save(settings)
+
+
+def ran_today(latest, today):
+    """True if the saved scan `latest` (from load_latest()) happened on
+    `today` (a "YYYY-MM-DD" string). A manual "Scan now" counts exactly
+    the same as an automatic one here — either way, today already has a
+    scan, so there's nothing further to check."""
+    return bool(latest and (latest.get("run_at") or "")[:10] == today)
+
+
+def should_auto_scan(settings, latest, today):
+    """Should the once-a-day automatic scan fire right now? No, if: the
+    feature is off; the automatic scan already ran today; or ANY scan —
+    including one Leon ran by hand with "Scan now" — already covered
+    today. Pure function (no clock, no I/O) so it's testable without
+    Flask or a real journal."""
+    if not settings.get("daily_scan"):
+        return False
+    if settings.get("last_auto_scan_date") == today:
+        return False
+    return not ran_today(latest, today)
