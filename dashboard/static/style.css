@@ -643,6 +643,10 @@ html { scroll-behavior: smooth; }
 .confidence-badge.conf-medium { color: var(--ink); border-color: var(--ink-soft); }
 .confidence-badge.conf-high { background: var(--ink); color: var(--paper); }
 
+/* The AI's own honest explanation of its uncertainty — printed as real
+   text, not a hover tooltip, so it's visible on a phone too. */
+.confidence-note { color: var(--ink-soft); font-size: 0.8rem; font-style: italic; margin: -0.2rem 0 0.6rem; }
+
 .lab-sources { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.2rem; }
 
 /* The New/Edit strategy form — a card of stacked inputs. */
@@ -859,3 +863,91 @@ html { scroll-behavior: smooth; }
   cursor: pointer;
 }
 .range-select:hover { color: var(--ink); }
+
+/* ── Fix bulletin: Leon's own editable "things to fix later" note ─────── */
+/* A tab pinned to the fixed right edge of the viewport (independent of the
+   .layout grid, so it never disturbs the sidebar/main columns). The handle
+   button is always visible; the body is absolutely positioned to its left
+   and only shown once expanded. */
+.bulletin-panel {
+  position: fixed;
+  top: 5rem;
+  right: 0;
+  z-index: 15;
+}
+
+.bulletin-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  writing-mode: vertical-rl;
+  font: inherit;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  background: var(--accent);
+  color: var(--paper);
+  border: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  padding: 0.75rem 0.4rem;
+  cursor: pointer;
+}
+.bulletin-handle:hover { background: var(--accent-dark); }
+
+.bulletin-body {
+  position: absolute;
+  top: 0;
+  right: 2.6rem;      /* leaves room for the handle strip */
+  width: 320px;
+  max-width: 85vw;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 1rem 1.1rem;
+  display: none;
+}
+.bulletin-panel.expanded .bulletin-body { display: block; }
+
+.bulletin-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.bulletin-header .subheading { margin: 0; }
+
+#bulletin-view ul { margin: 0.4rem 0 0.4rem 1.25rem; }
+#bulletin-view p { margin: 0.4rem 0; }
+
+.bulletin-toolbar { display: flex; gap: 0.4rem; margin-bottom: 0.4rem; }
+
+#bulletin-textarea {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.7rem;
+  min-height: 220px;
+  background: var(--paper-dim);
+  resize: vertical;
+  margin-bottom: 0.5rem;
+}
+
+/* On phones, the tab becomes a bottom sheet instead of a side panel —
+   pinned to the bottom edge so it can't cover content when collapsed. */
+@media (max-width: 900px) {
+  .bulletin-panel { top: auto; bottom: 0; left: 0; right: 0; }
+  .bulletin-handle {
+    position: static;
+    writing-mode: horizontal-tb;
+    width: 100%;
+    text-align: center;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+  .bulletin-body {
+    position: static;
+    width: 100%;
+    max-width: none;
+    max-height: 50vh;
+    border-radius: 0;
+  }
+}

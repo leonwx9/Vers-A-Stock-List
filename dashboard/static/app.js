@@ -339,6 +339,41 @@ document.getElementById("reset-btn").addEventListener("click", async () => {
   renderPortfolio(await res.json());
 });
 
+/* ── The optional daily order-fill scheduler ──────────────────────────── */
+/* Settles pending orders (and records the day's graph point) once past
+   8am Sydney time, for as long as the Mac app keeps running — no AI
+   involved. Off by default; this just flips the setting on/off. */
+const schedulerToggle = document.getElementById("scheduler-toggle");
+const schedulerStatus = document.getElementById("scheduler-status");
+
+function renderScheduler(settings) {
+  if (!settings) return;  // /api/portfolio/reset doesn't echo it back
+  schedulerToggle.checked = !!settings.enabled;
+  schedulerStatus.textContent = settings.last_run_date
+    ? `Last auto-settle: ${settings.last_run_date}`
+    : "Not run yet — turn on to settle orders automatically each morning.";
+}
+
+schedulerToggle.addEventListener("change", async () => {
+  const wanted = schedulerToggle.checked;
+  try {
+    const res = await fetch("/api/scheduler", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: wanted }),
+    });
+    const data = await res.json();
+    if (data.status === "ok") {
+      renderScheduler(data.scheduler);
+    } else {
+      schedulerToggle.checked = !wanted;
+      schedulerStatus.textContent = "⚠ " + (data.message || "Could not save the setting.");
+    }
+  } catch (err) {
+    schedulerToggle.checked = !wanted;
+    schedulerStatus.textContent = "⚠ Could not reach the server: " + err.message;
+  }
+});
+
 function renderPortfolio(data) {
   // The big number + change since the $10,000 start.
   document.getElementById("pf-value").textContent =
@@ -355,6 +390,7 @@ function renderPortfolio(data) {
   renderTrades(data.trades || []);
   currentHoldingSymbols = data.holdings.map((h) => h.symbol);
   renderSellDecisions();
+  renderScheduler(data.scheduler);
 }
 
 /* ── The trade log: every trade, when it happened, and WHY ────────────── */
@@ -1073,17 +1109,50 @@ async function loadLab() {
   labDailyToggle.checked = !!data.settings.daily_scan;
   if (data.daily_scan_running) {
     labScanStatus.textContent = "Running today's automatic scan in the background…";
+    pollForAutoScanResult(data.setups ? data.setups.run_at : null);
   }
+}
+
+/* The background daily scan has no button to press when it finishes, so
+   the page checks back on its own a couple of times (free — this just
+   re-reads the saved file, it can't start a second scan) and swaps in the
+   fresh result the moment it's ready, instead of leaving "running…" on
+   screen until Leon happens to reload. */
+function pollForAutoScanResult(previousRunAt, attempt = 0) {
+  const delays = [30000, 90000];
+  if (attempt >= delays.length) {
+    labScanStatus.textContent = "Still running — reload in a minute to see the result.";
+    return;
+  }
+  setTimeout(async () => {
+    const res = await fetch("/api/lab");
+    const data = await res.json();
+    if (data.setups && data.setups.run_at !== previousRunAt) {
+      labStrategies = data.strategies;
+      renderLabSetups(data.setups);
+      renderLabStrategies();
+    } else {
+      pollForAutoScanResult(previousRunAt, attempt + 1);
+    }
+  }, delays[attempt]);
 }
 
 labDailyToggle.addEventListener("change", async () => {
   const wanted = labDailyToggle.checked;
-  const res = await fetch("/api/lab/settings", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ daily_scan: wanted }),
-  });
-  const data = await res.json();
-  if (data.status !== "ok") labDailyToggle.checked = !wanted;  // revert on failure
+  try {
+    const res = await fetch("/api/lab/settings", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ daily_scan: wanted }),
+    });
+    const data = await res.json();
+    if (data.status !== "ok") {
+      labDailyToggle.checked = !wanted;  // revert — the server didn't save it
+      labScanStatus.textContent = "⚠ " + (data.message || "Could not save the setting.");
+    }
+  } catch (err) {
+    labDailyToggle.checked = !wanted;  // revert — we don't know if it saved
+    labScanStatus.textContent = "⚠ Could not reach the server: " + err.message;
+  }
 });
 
 labScanBtn.addEventListener("click", async () => {
@@ -1126,10 +1195,10 @@ function renderLabSetups(data) {
           <span class="pick-symbol">${esc(s.strategy_name)}</span>
           <div class="pick-name">${esc(s.whats_happening)}</div>
         </div>
-        <span class="confidence-badge conf-${esc(s.confidence.level)}"
-              title="${esc(s.confidence.note)}">
+        <span class="confidence-badge conf-${esc(s.confidence.level)}">
           confidence: ${esc(s.confidence.level)}</span>
       </div>
+      ${s.confidence.note ? `<p class="confidence-note">${esc(s.confidence.note)}</p>` : ""}
       <p><strong>Bull case:</strong> ${esc(s.bull_case)}</p>
       <p class="scan-bottom"><strong>Counter-case:</strong> ${esc(s.counter_case)}</p>
       <div class="dd-block"><strong>Risks</strong>
@@ -1278,3 +1347,117 @@ document.getElementById("lab-brainstorm-btn").addEventListener("click", async (e
 });
 
 loadLab();
+
+/* ── Fix bulletin: Leon's own editable "things to fix later" note ────── */
+/* Plain text with three simple markers — **bold**, _underline_, and "- "
+   for a dot point — deliberately not a rich-text editor, so the saved
+   file stays one readable string. Display is XSS-safe by construction:
+   the WHOLE text is escaped first, and only THEN do the markers turn
+   into <strong>/<u>/<li> tags — a marker can never inject real HTML. */
+const bulletinPanel = document.getElementById("bulletin-panel");
+const bulletinView = document.getElementById("bulletin-view");
+const bulletinEditor = document.getElementById("bulletin-editor");
+const bulletinTextarea = document.getElementById("bulletin-textarea");
+const bulletinStatus = document.getElementById("bulletin-status");
+let bulletinText = "";
+
+function renderBulletinMarkup(text) {
+  const lines = esc(text).split("\n");
+  let html = "";
+  let inList = false;
+  for (const line of lines) {
+    const isBullet = line.startsWith("- ");
+    if (isBullet && !inList) { html += "<ul>"; inList = true; }
+    if (!isBullet && inList) { html += "</ul>"; inList = false; }
+    const formatted = (isBullet ? line.slice(2) : line)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/_(.+?)_/g, "<u>$1</u>");
+    if (isBullet) {
+      html += `<li>${formatted}</li>`;
+    } else if (formatted.trim()) {
+      html += `<p>${formatted}</p>`;
+    }
+  }
+  if (inList) html += "</ul>";
+  return html;
+}
+
+function renderBulletinView() {
+  bulletinView.innerHTML = bulletinText.trim()
+    ? renderBulletinMarkup(bulletinText)
+    : `<p class="status-line">Nothing here yet — press Edit to add your own notes.</p>`;
+}
+
+async function loadBulletin() {
+  const res = await fetch("/api/bulletin");
+  const data = await res.json();
+  bulletinText = data.text || "";
+  renderBulletinView();
+}
+
+document.getElementById("bulletin-toggle").addEventListener("click", () => {
+  const expanded = bulletinPanel.classList.toggle("expanded");
+  localStorage.setItem("bulletin-expanded", expanded ? "1" : "0");
+});
+if (localStorage.getItem("bulletin-expanded") === "1") {
+  bulletinPanel.classList.add("expanded");
+}
+
+document.getElementById("bulletin-edit-btn").addEventListener("click", () => {
+  bulletinTextarea.value = bulletinText;
+  bulletinView.hidden = true;
+  bulletinEditor.hidden = false;
+});
+
+document.getElementById("bulletin-cancel-btn").addEventListener("click", () => {
+  bulletinEditor.hidden = true;
+  bulletinView.hidden = false;
+});
+
+/* Wraps the textarea's current selection in a marker (or, with nothing
+   selected, inserts a placeholder word already wrapped) — using
+   selectionStart/selectionEnd, not execCommand/contenteditable, so the
+   saved text stays plain and predictable. */
+function _wrapSelection(marker) {
+  const ta = bulletinTextarea;
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  const selected = ta.value.slice(start, end) || "text";
+  ta.value = ta.value.slice(0, start) + marker + selected + marker + ta.value.slice(end);
+  ta.focus();
+  ta.selectionStart = start + marker.length;
+  ta.selectionEnd = start + marker.length + selected.length;
+}
+
+document.getElementById("bulletin-bold-btn").addEventListener("click", () => _wrapSelection("**"));
+document.getElementById("bulletin-underline-btn").addEventListener("click", () => _wrapSelection("_"));
+document.getElementById("bulletin-bullet-btn").addEventListener("click", () => {
+  const ta = bulletinTextarea;
+  const start = ta.selectionStart;
+  const lineStart = ta.value.lastIndexOf("\n", start - 1) + 1;
+  ta.value = ta.value.slice(0, lineStart) + "- " + ta.value.slice(lineStart);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = start + 2;
+});
+
+document.getElementById("bulletin-save-btn").addEventListener("click", async () => {
+  try {
+    const res = await fetch("/api/bulletin", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: bulletinTextarea.value }),
+    });
+    const data = await res.json();
+    if (data.status === "ok") {
+      bulletinText = data.text;
+      renderBulletinView();
+      bulletinEditor.hidden = true;
+      bulletinView.hidden = false;
+      bulletinStatus.textContent = "";
+    } else {
+      bulletinStatus.textContent = "⚠ " + (data.message || "Could not save.");
+    }
+  } catch (err) {
+    bulletinStatus.textContent = "⚠ Could not reach the server: " + err.message;
+  }
+});
+
+loadBulletin();

@@ -92,9 +92,16 @@
           <h2>Paper Portfolio</h2>
           <p class="panel-subtitle">$10,000 pretend money · orders plan a price, then fill themselves against real trading sessions · whole shares · stop-loss discipline</p>
         </div>
-        <button id="reset-btn" class="action-btn ghost-btn">Reset</button>
+        <div class="btn-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="scheduler-toggle">
+            Settle orders daily at 8am (while the app is running) — free, no AI
+          </label>
+          <button id="reset-btn" class="action-btn ghost-btn">Reset</button>
+        </div>
       </div>
       <p id="portfolio-status" class="status-line"></p>
+      <p id="scheduler-status" class="status-line"></p>
 
       <!-- Big total-value number + change since start -->
       <div class="value-row">
@@ -183,6 +190,35 @@
   <footer class="site-footer">
     Live market data · paper trading only · charts by TradingView Lightweight Charts™ · no investment advice
   </footer>
+
+  <!-- ── Fix bulletin: Leon's own editable list of future to-dos ───────── -->
+  <!-- A sticky note, not configuration — nothing else in the app reads this.
+       Starts collapsed (a tab pinned to the right edge) so it never
+       ambushes the layout; expanding it slides the note out. -->
+  <aside id="bulletin-panel" class="bulletin-panel">
+    <button id="bulletin-toggle" class="bulletin-handle" title="Fix bulletin">Fix bulletin</button>
+    <div class="bulletin-body">
+      <div class="bulletin-header">
+        <h3 class="subheading">Fix bulletin</h3>
+        <button id="bulletin-edit-btn" class="mini-btn">Edit</button>
+      </div>
+      <p class="hint">Your own list of things to fix or revisit later.</p>
+      <div id="bulletin-view"></div>
+      <div id="bulletin-editor" hidden>
+        <div class="bulletin-toolbar">
+          <button type="button" id="bulletin-bold-btn" class="mini-btn" title="Bold"><strong>B</strong></button>
+          <button type="button" id="bulletin-underline-btn" class="mini-btn" title="Underline"><u>U</u></button>
+          <button type="button" id="bulletin-bullet-btn" class="mini-btn" title="Dot point">•</button>
+        </div>
+        <textarea id="bulletin-textarea"></textarea>
+        <div class="btn-row">
+          <button id="bulletin-save-btn" class="action-btn">Save</button>
+          <button id="bulletin-cancel-btn" class="action-btn ghost-btn">Cancel</button>
+        </div>
+      </div>
+      <p id="bulletin-status" class="status-line"></p>
+    </div>
+  </aside>
 
   <!-- TradingView Lightweight Charts™ (Apache-2.0), served locally. -->
   <script src="{{ url_for('static', filename='vendor/lightweight-charts.standalone.production.js') }}"></script>
