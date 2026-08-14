@@ -111,6 +111,109 @@ llmToggle.addEventListener("change", async () => {
 
 loadLlmSettings();
 
+/* ── Overnight analysis: up to 3 automatic runs a night while the US
+   market is open, using Leon's own Claude account ────────────────────── */
+const overnightToggle = document.getElementById("overnight-toggle");
+const overnightTimesBox = document.getElementById("overnight-times");
+const overnightStatus = document.getElementById("overnight-status");
+
+/* The three ET run times are set relative to the US market, but Leon
+   reads a Sydney clock — this converts one "HH:MM" ET time into an
+   "≈ H:MMpm Sydney tonight" hint. The ET↔Sydney gap isn't a fixed number
+   (both zones observe daylight saving, on different dates), so rather
+   than hard-code an offset, this asks the browser's own timezone data
+   twice: a first guess, then a correction based on what that guess
+   actually shows in ET — accurate on any date, not just today. */
+function etTimeToSydneyHint(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const now = new Date();
+  const nyParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now).reduce((acc, p) => ((acc[p.type] = p.value), acc), {});
+  const guess = new Date(Date.UTC(nyParts.year, nyParts.month - 1, nyParts.day, h, m));
+  const shownEt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).format(guess);
+  const [shownH, shownM] = shownEt.split(":").map(Number);
+  const correctedMs = guess.getTime() + ((h * 60 + m) - (shownH * 60 + shownM)) * 60000;
+  const sydneyTime = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Australia/Sydney", hour: "numeric", minute: "2-digit", hour12: true,
+  }).format(new Date(correctedMs));
+  return `≈ ${sydneyTime} Sydney tonight`;
+}
+
+function renderOvernightTimes(times) {
+  overnightTimesBox.innerHTML = times.map((t, i) => `
+    <label class="time-slot">
+      <input type="time" class="overnight-time-input" data-index="${i}" value="${esc(t)}">
+      <span class="hint">${esc(etTimeToSydneyHint(t))}</span>
+    </label>`).join("");
+
+  overnightTimesBox.querySelectorAll(".overnight-time-input").forEach((input) =>
+    input.addEventListener("change", async () => {
+      const inputs = [...overnightTimesBox.querySelectorAll(".overnight-time-input")];
+      const newTimes = inputs.map((el) => el.value);
+      try {
+        const res = await fetch("/api/overnight", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ times_et: newTimes }),
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+          renderOvernightTimes(data.effective_times_et);
+          overnightStatus.textContent = "";
+        } else {
+          renderOvernightTimes(times);  // revert to what was saved before
+          overnightStatus.textContent = "⚠ " + (data.message || "Could not save the times.");
+        }
+      } catch (err) {
+        renderOvernightTimes(times);
+        overnightStatus.textContent = "⚠ Could not reach the server: " + err.message;
+      }
+    }));
+}
+
+function renderOvernightSettings(data) {
+  overnightToggle.checked = !!data.settings.enabled;
+  renderOvernightTimes(data.effective_times_et);
+
+  const lastRuns = Object.values(data.settings.last_runs || {});
+  const lastRunLine = lastRuns.length
+    ? `Last overnight run: ${lastRuns.sort().slice(-1)[0]}`
+    : "No overnight run yet.";
+  overnightStatus.textContent = data.settings.last_error
+    ? "⚠ " + data.settings.last_error
+    : lastRunLine;
+}
+
+async function loadOvernightSettings() {
+  const res = await fetch("/api/overnight");
+  const data = await res.json();
+  if (data.status === "ok") renderOvernightSettings(data);
+}
+
+overnightToggle.addEventListener("change", async () => {
+  const wanted = overnightToggle.checked;
+  try {
+    const res = await fetch("/api/overnight", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: wanted }),
+    });
+    const data = await res.json();
+    if (data.status === "ok") {
+      renderOvernightSettings(data);
+    } else {
+      overnightToggle.checked = !wanted;
+      overnightStatus.textContent = "⚠ " + (data.message || "Could not save the setting.");
+    }
+  } catch (err) {
+    overnightToggle.checked = !wanted;
+    overnightStatus.textContent = "⚠ Could not reach the server: " + err.message;
+  }
+});
+
+loadOvernightSettings();
+
 /* ── 2. Run a fresh analysis when the button is pressed ───────────────── */
 /* The dropdown NEXT TO the button decides what gets analysed — one
    watchlist, or all of them. Chosen first, then Run. */

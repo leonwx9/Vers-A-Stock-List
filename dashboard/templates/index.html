@@ -84,6 +84,18 @@
       <!-- Says which AI is in effect right now (your Claude account, or a paid key). -->
       <p id="llm-status" class="status-line"></p>
 
+      <!-- Overnight analysis: up to 3 automatic runs a night while the US
+           market is open, using Leon's own Claude account. Off by default;
+           the three ET times are adjustable (default: open/mid/close). -->
+      <div class="btn-row" style="margin-top:0.5rem">
+        <label class="checkbox-label">
+          <input type="checkbox" id="overnight-toggle">
+          Analyse automatically while the US market is open (3 runs/night — uses your Claude account; the Mac must be awake)
+        </label>
+      </div>
+      <div id="overnight-times" class="btn-row" style="margin-top:0.5rem"></div>
+      <p id="overnight-status" class="status-line"></p>
+
       <!-- Top picks appear here as cards. -->
       <div id="shortlist"></div>
 

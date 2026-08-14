@@ -618,6 +618,20 @@ html { scroll-behavior: smooth; }
   cursor: pointer;
 }
 
+/* One overnight-analysis run time: a small ET clock input plus a
+   computed "≈ H:MMpm Sydney tonight" hint underneath. */
+.time-slot { display: flex; flex-direction: column; gap: 0.15rem; }
+.time-slot input[type="time"] {
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  padding: 0.25rem 0.4rem;
+}
+.time-slot .hint { font-size: 0.7rem; }
+
 /* MINE vs AI badge on a journal entry — permanent, never editable. */
 .lab-badge {
   border-radius: 999px;

@@ -47,3 +47,10 @@ lab:
 # AI involved. Only runs while the Mac app itself is running — see HANDOVER.md.
 scheduler:
   fill_hour_sydney: 8         # Sydney hour (24h) after which the daily run becomes due
+  # Default times for the three optional overnight analysis runs, in US-
+  # market time (ET) — DST-proof, because the market itself lives in ET.
+  # 09:35 ≈ just after open, 12:30 ≈ mid-session, 15:30 ≈ just before close.
+  # Leon can override these from the dashboard without touching this file;
+  # only fires while his Claude account is the active AI provider — see
+  # HANDOVER.md.
+  analysis_times_et: ["09:35", "12:30", "15:30"]

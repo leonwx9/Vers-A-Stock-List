@@ -199,6 +199,62 @@ def api_analysis():
     return jsonify({"status": "ok", **result})
 
 
+def _augment_universe_with_held_stocks(universe):
+    """Add every currently-held stock the given universe doesn't already
+    cover, so a position never goes unreviewed just because of which
+    watchlist (or, for the overnight scheduler, which slot) was chosen.
+    Shared by the manual Run button and the overnight scheduler.
+
+    Returns (universe, holdings_for_review, review_only) — review_only
+    marks the appended stocks so they can never win a shortlist slot that
+    belongs to the scope actually being analysed (see
+    searcher.run_analysis's review_only param)."""
+    positions = portfolio.current_positions()
+    universe = list(universe)
+    universe_symbols = {a["symbol"] for a in universe}
+    review_only = set()
+    for symbol in positions:
+        if symbol not in universe_symbols:
+            universe.append(watchlists.get_stock(symbol) or
+                            {"symbol": symbol, "name": symbol,
+                             "type": "stock", "flags": []})
+            universe_symbols.add(symbol)
+            review_only.add(symbol)
+    holdings_for_review = {s: p["avg_cost"] for s, p in positions.items()}
+    return universe, holdings_for_review, review_only
+
+
+def _run_overnight_analysis(slot):
+    """Called by the scheduler thread (see scheduler.run_overnight_once)
+    when an overnight slot is due — the same steps as pressing "Run
+    analysis" with "All watchlists" chosen. Raises on failure rather than
+    returning a Flask response; scheduler.run_overnight_once() catches
+    that and records it as the overnight settings' last_error for the
+    dashboard to show."""
+    provider = get_provider()  # MissingKeyError propagates — the provider
+                               # gate already checked claude_code is active,
+                               # but the CLI could still be missing/logged
+                               # out; that's a real problem worth surfacing.
+    universe, holdings_for_review, review_only = \
+        _augment_universe_with_held_stocks(watchlists.all_tracked_assets())
+    if not universe:
+        raise ValueError("No stocks to analyse — add some to a watchlist first.")
+
+    if not analysis_lock.acquire(blocking=False):
+        raise RuntimeError(
+            "Skipped — a manual analysis was already running at the "
+            "scheduled time. Will try again at the next overnight slot.")
+    try:
+        result = searcher.run_analysis(
+            provider, prices, universe=universe,
+            scope_name=f"overnight ({slot} ET)",
+            holdings=holdings_for_review, review_only=review_only)
+        portfolio.place_orders(result["rows"], result["shortlist"],
+                               result["held_reviews"])
+    finally:
+        analysis_lock.release()
+
+
 @app.route("/api/run-analysis", methods=["POST"])
 def api_run_analysis():
     """Run a fresh analysis of watchlisted stocks. The browser sends
@@ -229,20 +285,8 @@ def api_run_analysis():
             return jsonify({"status": "error",
                             "message": "That watchlist no longer exists."}), 404
 
-    # Pull in every currently-held stock this run's scope doesn't already
-    # cover, so it still gets a HOLD/SELL review this run. Track which
-    # symbols got appended this way — they must be reviewed but must NEVER
-    # compete for a shortlist slot that belongs to the chosen watchlist.
-    positions = portfolio.current_positions()
-    universe_symbols = {a["symbol"] for a in universe}
-    review_only = set()
-    for symbol in positions:
-        if symbol not in universe_symbols:
-            universe.append(watchlists.get_stock(symbol) or
-                            {"symbol": symbol, "name": symbol,
-                             "type": "stock", "flags": []})
-            universe_symbols.add(symbol)
-            review_only.add(symbol)
+    universe, holdings_for_review, review_only = \
+        _augment_universe_with_held_stocks(universe)
 
     if not universe:
         return jsonify({"status": "error",
@@ -254,7 +298,6 @@ def api_run_analysis():
                         "message": "An analysis is already running — wait "
                                    "for it to finish."}), 409
     try:
-        holdings_for_review = {s: p["avg_cost"] for s, p in positions.items()}
         result = searcher.run_analysis(provider, prices, universe=universe,
                                        scope_name=scope_name,
                                        holdings=holdings_for_review,
@@ -488,6 +531,39 @@ def api_scheduler_settings():
     return jsonify({"status": "ok", "scheduler": settings})
 
 
+@app.route("/api/overnight")
+def api_overnight_settings():
+    """The overnight analysis scheduler's saved settings, plus the
+    EFFECTIVE run times right now (Leon's own times if he's customised
+    them, else rules.yaml's defaults) — the dashboard always has real
+    numbers to show, whether or not he's ever touched the setting."""
+    settings = scheduler.load_overnight_settings()
+    return jsonify({"status": "ok", "settings": settings,
+                    "effective_times_et": scheduler.effective_analysis_times(settings)})
+
+
+@app.route("/api/overnight", methods=["POST"])
+def api_overnight_settings_save():
+    """{"enabled": bool?, "times_et": [3 "HH:MM" strings]?} — either or
+    both at once. Free: this only decides WHEN the scheduler thread tries
+    to run — it still only actually fires while the toggle above is ALSO
+    set to Leon's own Claude account (the provider gate lives in
+    scheduler.py, checked fresh on every tick)."""
+    body = request.get_json(silent=True) or {}
+    settings = scheduler.load_overnight_settings()
+    if "times_et" in body:
+        try:
+            scheduler.validate_analysis_times(body["times_et"])
+        except ValueError as e:
+            return jsonify({"status": "error", "message": str(e)}), 400
+        settings["times_et"] = body["times_et"]
+    if "enabled" in body:
+        settings["enabled"] = bool(body["enabled"])
+    scheduler.save_overnight_settings(settings)
+    return jsonify({"status": "ok", "settings": settings,
+                    "effective_times_et": scheduler.effective_analysis_times(settings)})
+
+
 # ── AI provider: Leon's own Claude account, or a paid API key ────────────
 
 @app.route("/api/llm")
@@ -682,17 +758,20 @@ if __name__ == "__main__":
     # anything else on the network.
     debug = os.getenv("DASHBOARD_DEBUG", "").strip() == "1"
 
-    # The optional daily order-fill scheduler (rules.yaml → scheduler.fill_hour_sydney):
-    # settles pending orders and records the day's portfolio-graph point
-    # once Sydney time passes the configured hour, for as long as this Mac
-    # process keeps running. No AI call involved. In debug mode, Werkzeug's
-    # auto-reloader actually runs this file in TWO processes (a watcher and
-    # a worker) — only the real worker (which has WERKZEUG_RUN_MAIN set)
-    # should start the thread, or a debug run would end up with two
-    # schedulers ticking at once.
+    # The two optional background schedulers — order fills (rules.yaml →
+    # scheduler.fill_hour_sydney) and overnight analysis (→
+    # scheduler.analysis_times_et, off by default, only actually fires
+    # while Leon's Claude account is the active provider) — share one
+    # thread, for as long as this Mac process keeps running. In debug
+    # mode, Werkzeug's auto-reloader actually runs this file in TWO
+    # processes (a watcher and a worker) — only the real worker (which
+    # has WERKZEUG_RUN_MAIN set) should start the thread, or a debug run
+    # would end up with two schedulers ticking at once.
     if not debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         fill_hour = load_rules().get("scheduler", {}).get("fill_hour_sydney", 8)
-        scheduler.start_scheduler_thread(portfolio, fill_hour=fill_hour)
+        scheduler.start_scheduler_thread(
+            portfolio, fill_hour=fill_hour,
+            run_overnight_analysis=_run_overnight_analysis)
 
     app.run(debug=debug,
             host="127.0.0.1" if debug else "0.0.0.0",
