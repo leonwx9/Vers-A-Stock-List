@@ -38,7 +38,9 @@ from dashboard.datasources.live_source import LiveSource
 from dashboard.datasources.news_source import GoogleNewsSource
 from dashboard.datasources.sample_source import SampleSource
 from dashboard.datasources.stock_search import search_stocks
-from dashboard.llm.provider import MissingKeyError, get_provider
+from dashboard.llm.provider import (MissingKeyError, current_provider_name,
+                                    get_provider, provider_source,
+                                    save_provider_choice)
 from dashboard import bulletin, scheduler
 from dashboard.portfolio.engine import PaperPortfolio
 from dashboard.scanner import pivot_scanner
@@ -484,6 +486,33 @@ def api_scheduler_settings():
         settings["enabled"] = bool(body["enabled"])
     scheduler.save_settings(settings)
     return jsonify({"status": "ok", "scheduler": settings})
+
+
+# ── AI provider: Leon's own Claude account, or a paid API key ────────────
+
+@app.route("/api/llm")
+def api_llm_settings():
+    """Which AI provider is in effect right now, and whether that comes
+    from Leon's dashboard toggle or just .env's LLM_PROVIDER default."""
+    return jsonify({"status": "ok", "provider": current_provider_name(),
+                    "source": provider_source()})
+
+
+@app.route("/api/llm", methods=["POST"])
+def api_llm_settings_save():
+    """{"provider": "claude_code" | "openrouter" | "anthropic"} — Leon's
+    connect/disconnect toggle for using his own Claude account. Saved in
+    shared storage, so the cloud copy shows the same choice too: pressing
+    an AI button there while set to claude_code just gets
+    ClaudeCodeProvider's own friendly "Mac only" message — correct
+    behaviour, since no cloud server can ever use Leon's account login."""
+    body = request.get_json(silent=True) or {}
+    try:
+        save_provider_choice(body.get("provider"))
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    return jsonify({"status": "ok", "provider": current_provider_name(),
+                    "source": provider_source()})
 
 
 @app.route("/api/ticker/<path:symbol>")

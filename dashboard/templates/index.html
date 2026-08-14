@@ -68,6 +68,10 @@
         </div>
         <!-- Pick WHICH watchlist to analyse, then press Run. -->
         <div class="btn-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="llm-toggle">
+            Use my Claude account for AI (Pro plan — Mac only)
+          </label>
           <select id="analyze-scope" class="range-select" title="Which watchlist the analysis covers">
             <option value="all">All watchlists</option>
           </select>
@@ -77,6 +81,8 @@
 
       <!-- Status line: shows "running…", errors, or when the last run happened. -->
       <p id="analysis-status" class="status-line"></p>
+      <!-- Says which AI is in effect right now (your Claude account, or a paid key). -->
+      <p id="llm-status" class="status-line"></p>
 
       <!-- Top picks appear here as cards. -->
       <div id="shortlist"></div>

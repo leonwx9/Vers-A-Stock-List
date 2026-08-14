@@ -71,6 +71,46 @@ async function loadExisting() {
   }
 }
 
+/* ── Connect/disconnect toggle: pay with Leon's Claude account, or a
+   funded API key ─────────────────────────────────────────────────────── */
+const llmToggle = document.getElementById("llm-toggle");
+const llmStatus = document.getElementById("llm-status");
+
+function renderLlmSettings(data) {
+  llmToggle.checked = data.provider === "claude_code";
+  llmStatus.textContent = data.provider === "claude_code"
+    ? "AI: your Claude account (uses your subscription's shared usage limits)"
+    : `AI: ${data.provider === "openrouter" ? "OpenRouter key" : "Anthropic key"}`;
+}
+
+async function loadLlmSettings() {
+  const res = await fetch("/api/llm");
+  const data = await res.json();
+  if (data.status === "ok") renderLlmSettings(data);
+}
+
+llmToggle.addEventListener("change", async () => {
+  const wanted = llmToggle.checked;
+  try {
+    const res = await fetch("/api/llm", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: wanted ? "claude_code" : "openrouter" }),
+    });
+    const data = await res.json();
+    if (data.status === "ok") {
+      renderLlmSettings(data);
+    } else {
+      llmToggle.checked = !wanted;
+      llmStatus.textContent = "⚠ " + (data.message || "Could not save the setting.");
+    }
+  } catch (err) {
+    llmToggle.checked = !wanted;
+    llmStatus.textContent = "⚠ Could not reach the server: " + err.message;
+  }
+});
+
+loadLlmSettings();
+
 /* ── 2. Run a fresh analysis when the button is pressed ───────────────── */
 /* The dropdown NEXT TO the button decides what gets analysed — one
    watchlist, or all of them. Chosen first, then Run. */
