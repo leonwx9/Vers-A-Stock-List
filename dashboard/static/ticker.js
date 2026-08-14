@@ -43,6 +43,7 @@ async function load() {
   renderNews();
   renderDeepDive(pageData.deep_dive);
   renderMembership();
+  renderWatch();
 
   document.getElementById("chart-note").textContent =
     pageData.data_source === "sample"
@@ -94,6 +95,63 @@ async function renderMembership() {
       renderMembership();  // redraw so the chip's on/off style updates
     }));
 }
+
+/* ── Overnight price watch ─────────────────────────────────────────────── */
+/* "Tell me if this reaches $X tonight" — checked once, at the overnight
+   scheduler's middle run, not continuously. Save replaces any existing
+   watch for this stock; Clear removes it. */
+function renderWatch() {
+  const input = document.getElementById("watch-price");
+  const clearBtn = document.getElementById("watch-clear-btn");
+  const status = document.getElementById("watch-status");
+  const watch = pageData.watch;
+
+  if (watch) {
+    input.value = watch.level;
+    const direction = watch.set_when_price < watch.level ? "rises to" : "falls to";
+    status.textContent = `Watching — you'll get a dedicated buy/sell check if the price ${direction} $${watch.level}.`;
+    clearBtn.hidden = false;
+  } else {
+    input.value = "";
+    status.textContent = "";
+    clearBtn.hidden = true;
+  }
+}
+
+document.getElementById("watch-save-btn").addEventListener("click", async () => {
+  const status = document.getElementById("watch-status");
+  const level = parseFloat(document.getElementById("watch-price").value);
+  if (!level || level <= 0) {
+    status.textContent = "⚠ Enter a real price first.";
+    return;
+  }
+  try {
+    const res = await fetch(`/api/ticker/${encodeURIComponent(SYMBOL)}/watch`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level }),
+    });
+    const data = await res.json();
+    if (data.status === "ok") {
+      pageData.watch = data.watch;
+      renderWatch();
+    } else {
+      status.textContent = "⚠ " + (data.message || "Could not save the watch.");
+    }
+  } catch (err) {
+    status.textContent = "⚠ Could not reach the server: " + err.message;
+  }
+});
+
+document.getElementById("watch-clear-btn").addEventListener("click", async () => {
+  try {
+    await fetch(`/api/ticker/${encodeURIComponent(SYMBOL)}/watch`, { method: "DELETE" });
+    pageData.watch = null;
+    renderWatch();
+  } catch (err) {
+    document.getElementById("watch-status").textContent =
+      "⚠ Could not reach the server: " + err.message;
+  }
+});
 
 /* ── Chart ───────────────────────────────────────────────────────────── */
 function buildChart() {

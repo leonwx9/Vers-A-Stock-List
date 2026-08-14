@@ -104,6 +104,16 @@ def validate_analysis_times(times):
         raise ValueError("The three times must be different from each other.")
 
 
+def is_middle_slot(slot, slots):
+    """True if `slot` is chronologically the MIDDLE of the three
+    overnight times — used to decide whether an overnight run should
+    check price watches (see price_watches.py) instead of doing a normal
+    full analysis. Sorts first, so this stays correct even if Leon saved
+    his three times out of chronological order — "HH:MM" strings sort
+    correctly as plain text, so no time-parsing is needed."""
+    return len(slots) == 3 and sorted(slots)[1] == slot
+
+
 def _slots_due(settings, now_et, slots):
     """Every slot time that's due right now — weekday only (the market
     lives Mon-Fri; US holidays are NOT checked, so a holiday tick just

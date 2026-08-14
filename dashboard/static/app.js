@@ -214,6 +214,50 @@ overnightToggle.addEventListener("change", async () => {
 
 loadOvernightSettings();
 
+/* ── Price watches: "tell me if this reaches $X tonight" ─────────────── */
+/* Set from a ticker's own page (ticker.js); this is just the compact list
+   so Leon can see (and remove) active watches without visiting each
+   stock. Checked once, at the overnight scheduler's middle run. */
+async function loadPriceWatches() {
+  const res = await fetch("/api/watches");
+  const data = await res.json();
+  if (data.status === "ok") renderPriceWatches(data.watches);
+}
+
+function renderPriceWatches(watches) {
+  const box = document.getElementById("price-watches");
+  const symbols = Object.keys(watches);
+  if (!symbols.length) {
+    box.innerHTML = "";
+    return;
+  }
+  const rows = symbols.map((symbol) => {
+    const w = watches[symbol];
+    const name = (wlData.stocks[symbol] || {}).name || symbol;
+    const rising = w.set_when_price < w.level;
+    return `
+      <div class="watch-list-row" data-symbol="${esc(symbol)}">
+        <span class="watch-arrow" title="${rising ? "Fires if the price rises to this level" : "Fires if the price falls to this level"}">${rising ? "↑" : "↓"}</span>
+        <strong>${esc(symbol)}</strong>
+        <span class="hint">${esc(name)}</span>
+        <span>$${w.level}</span>
+        <button class="mini-btn watch-remove-btn" data-symbol="${esc(symbol)}">×</button>
+      </div>`;
+  }).join("");
+  box.innerHTML = `
+    <h3 class="subheading">Price watches <span class="hint">checked at the middle overnight run</span></h3>
+    ${rows}`;
+
+  box.querySelectorAll(".watch-remove-btn").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      await fetch(`/api/ticker/${encodeURIComponent(btn.dataset.symbol)}/watch`,
+                 { method: "DELETE" });
+      loadPriceWatches();
+    }));
+}
+
+loadPriceWatches();
+
 /* ── 2. Run a fresh analysis when the button is pressed ───────────────── */
 /* The dropdown NEXT TO the button decides what gets analysed — one
    watchlist, or all of them. Chosen first, then Run. */

@@ -102,6 +102,25 @@ def et(y, m, d, h, mi):
     return datetime(y, m, d, h, mi, tzinfo=ET)
 
 
+# ── is_middle_slot ─────────────────────────────────────────────────────
+
+def test_is_middle_slot_identifies_the_chronological_middle():
+    assert scheduler_module.is_middle_slot("12:30", SLOTS)
+    assert not scheduler_module.is_middle_slot("09:35", SLOTS)
+    assert not scheduler_module.is_middle_slot("15:30", SLOTS)
+
+
+def test_is_middle_slot_correct_even_if_times_saved_out_of_order():
+    # Leon could save his three times in any order — the middle is
+    # chronological, not positional.
+    assert scheduler_module.is_middle_slot("12:30", ["15:30", "09:35", "12:30"])
+    assert not scheduler_module.is_middle_slot("09:35", ["15:30", "09:35", "12:30"])
+
+
+def test_is_middle_slot_false_when_not_exactly_three_slots():
+    assert not scheduler_module.is_middle_slot("12:30", ["09:35", "12:30"])
+
+
 # ── validate_analysis_times ──────────────────────────────────────────────
 
 def test_validate_analysis_times_accepts_three_distinct_session_times():

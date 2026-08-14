@@ -632,6 +632,33 @@ html { scroll-behavior: smooth; }
 }
 .time-slot .hint { font-size: 0.7rem; }
 
+/* The "tell me if this reaches $X tonight" box on a ticker page. */
+.watch-box { padding: 0.75rem 1rem; margin-top: 0.75rem; }
+.watch-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.watch-row label { font-size: 0.85rem; color: var(--ink-soft); }
+.watch-row input[type="number"] {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  padding: 0.3rem 0.5rem;
+  width: 7rem;
+}
+
+/* The compact "Price watches" list on the Stock Searcher panel. */
+.watch-list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.watch-list-row:last-child { border-bottom: none; }
+.watch-list-row .watch-arrow { color: var(--accent); font-weight: 600; }
+
 /* MINE vs AI badge on a journal entry — permanent, never editable. */
 .lab-badge {
   border-radius: 999px;

@@ -269,6 +269,46 @@ def test_a_new_run_replaces_still_pending_orders(tmp_path):
     assert sum(1 for o in pf.state["orders"] if o["status"] == "pending") == 1
 
 
+def test_a_scoped_run_leaves_out_of_scope_pending_orders_alone(tmp_path):
+    # This is the exact bug a narrowly-scoped run (e.g. the overnight
+    # scheduler's price-watch-triggered run — see price_watches.py) must
+    # never reintroduce: analysing ONE stock must not cancel another
+    # stock's still-pending order from an earlier, broader run.
+    bars = {"AAPL": [bar("2026-01-06", 190, 192, 188, 191)],
+           "NVDA": [bar("2026-01-06", 130, 132, 127, 131)]}
+    pf = make_portfolio(tmp_path, bars)
+    # An earlier, full run placed a pending BUY for AAPL (price never
+    # reached, so it's still sitting there).
+    first = pf.place_orders([_row("AAPL", entry_price=90)], ["AAPL"], {}, now=PLACE_NOW)
+    aapl_order_id = first[0]["id"]
+
+    # A later run, scoped to JUST NVDA (a price watch firing on it),
+    # must not touch AAPL's still-pending order.
+    pf.place_orders([_row("NVDA", entry_price=90)], ["NVDA"], {},
+                    now=datetime(2026, 1, 6, 22, 0, tzinfo=timezone.utc),
+                    analyzed=["NVDA"])
+
+    aapl_order = next(o for o in pf.state["orders"] if o["id"] == aapl_order_id)
+    assert aapl_order["status"] == "pending"  # untouched, not "replaced"
+    nvda_orders = [o for o in pf.state["orders"] if o["symbol"] == "NVDA"]
+    assert any(o["status"] == "pending" for o in nvda_orders)
+
+
+def test_a_scoped_run_still_replaces_its_own_prior_pending_order(tmp_path):
+    # Scoping doesn't mean "never replace" — a symbol INSIDE the scope
+    # still gets fresh thinking, exactly like an unscoped run.
+    bars = {"NVDA": [bar("2026-01-06", 130, 132, 127, 131)]}
+    pf = make_portfolio(tmp_path, bars)
+    first = pf.place_orders([_row("NVDA", entry_price=90)], ["NVDA"], {}, now=PLACE_NOW)
+
+    pf.place_orders([_row("NVDA", entry_price=95)], ["NVDA"], {},
+                    now=datetime(2026, 1, 6, 22, 0, tzinfo=timezone.utc),
+                    analyzed=["NVDA"])
+
+    old_order = next(o for o in pf.state["orders"] if o["id"] == first[0]["id"])
+    assert old_order["status"] == "replaced"
+
+
 def test_never_buys_risk_flagged_products(tmp_path):
     # TQQQ is flagged leveraged in the real universe config.
     bars = {"TQQQ": [bar("2026-01-06", 70, 71, 69, 70)]}

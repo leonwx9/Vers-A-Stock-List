@@ -159,7 +159,7 @@ class PaperPortfolio:
                 for s, p in self.state["positions"].items()}
 
     # ── Placing orders (after every analysis run) ────────────────────────
-    def place_orders(self, rows, shortlist, held_reviews, now=None):
+    def place_orders(self, rows, shortlist, held_reviews, now=None, analyzed=None):
         """Turn one analysis run into orders. Called right after
         run_analysis(). Returns the list of orders just created.
 
@@ -171,6 +171,14 @@ class PaperPortfolio:
                for every currently-held stock this run reviewed.
         now — the placement instant (timezone-aware); defaults to real
                "now". Tests pass a fixed value for deterministic dates.
+        analyzed — optional list/set of symbols THIS run actually
+               analysed. None (the default) means "the whole universe" —
+               every pending order gets replaced, exactly as before. Pass
+               it when a run is narrowly scoped (e.g. the overnight
+               scheduler's price-watch-triggered run, which analyses only
+               the one or two stocks that reached their level) — a run
+               that says nothing about a stock must never cancel that
+               stock's still-pending order from an earlier, broader run.
         """
         now = now or datetime.now(timezone.utc)
         self.process_fills(now=now)  # settle anything outstanding first
@@ -179,13 +187,20 @@ class PaperPortfolio:
         flags_by_symbol = self.flags_source()
         placed_at = now.isoformat(timespec="seconds")
         eligible_from = _eligible_from_date(now)
+        analyzed = set(analyzed) if analyzed is not None else None
 
-        # A fresh run supersedes whatever was still pending — Leon's own
-        # mental model: settle the past, review holdings, THEN place fresh
-        # orders for the next session. Orders live ~1-2 days, not forever.
+        # A fresh run supersedes whatever was still pending FOR THE
+        # SYMBOLS IT ACTUALLY ANALYSED — Leon's own mental model: settle
+        # the past, review holdings, THEN place fresh orders for the next
+        # session. Orders for symbols OUTSIDE a scoped run are left
+        # exactly as they were; a scoped run has nothing new to say about
+        # them, so it must not touch them.
         for order in self.state["orders"]:
-            if order["status"] == "pending":
-                order["status"] = "replaced"
+            if order["status"] != "pending":
+                continue
+            if analyzed is not None and order["symbol"] not in analyzed:
+                continue
+            order["status"] = "replaced"
 
         new_orders = []
 

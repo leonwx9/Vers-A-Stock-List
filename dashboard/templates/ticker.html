@@ -47,6 +47,19 @@
     <!-- Which watchlists hold this stock (tick to add, untick to remove). -->
     <div id="wl-membership"></div>
 
+    <!-- Overnight price watch: "tell me if this reaches $X tonight" —
+         checked once, at the overnight scheduler's middle run. -->
+    <div class="panel watch-box">
+      <div class="watch-row">
+        <label for="watch-price">Overnight price watch</label>
+        <input type="number" id="watch-price" step="0.01" min="0"
+               placeholder="e.g. 152.50">
+        <button id="watch-save-btn" class="action-btn ghost-btn">Save</button>
+        <button id="watch-clear-btn" class="action-btn ghost-btn" hidden>Clear</button>
+      </div>
+      <p id="watch-status" class="status-line"></p>
+    </div>
+
     <!-- ── Chart card ────────────────────────────────────────────────── -->
     <section class="panel">
       <div class="chart-controls">

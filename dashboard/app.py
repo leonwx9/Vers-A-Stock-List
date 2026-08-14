@@ -41,7 +41,7 @@ from dashboard.datasources.stock_search import search_stocks
 from dashboard.llm.provider import (MissingKeyError, current_provider_name,
                                     get_provider, provider_source,
                                     save_provider_choice)
-from dashboard import bulletin, scheduler
+from dashboard import bulletin, price_watches, scheduler
 from dashboard.portfolio.engine import PaperPortfolio
 from dashboard.scanner import pivot_scanner
 from dashboard.scanner.edgar import EdgarClient
@@ -226,8 +226,30 @@ def _augment_universe_with_held_stocks(universe):
 
 def _run_overnight_analysis(slot):
     """Called by the scheduler thread (see scheduler.run_overnight_once)
-    when an overnight slot is due — the same steps as pressing "Run
-    analysis" with "All watchlists" chosen. Raises on failure rather than
+    when an overnight slot is due.
+
+    The MIDDLE slot (chronologically) is special: if any of Leon's price
+    watches (see price_watches.py) has been reached tonight, THIS run is
+    dedicated to just those triggered stocks instead of the normal full
+    analysis. Every other slot — and the middle slot too, when nothing
+    has fired — runs the usual "All watchlists" analysis unchanged."""
+    overnight_settings = scheduler.load_overnight_settings()
+    slots = scheduler.effective_analysis_times(overnight_settings)
+
+    if scheduler.is_middle_slot(slot, slots):
+        watched_symbols = list(price_watches.load())
+        current_prices = {s: prices.get_quote(s)["price"] for s in watched_symbols}
+        fired = price_watches.check_all(current_prices)
+        if fired:
+            _run_price_watch_analysis(fired)
+            return
+
+    _run_full_overnight_analysis(slot)
+
+
+def _run_full_overnight_analysis(slot):
+    """The normal, full "All watchlists" overnight run — the same steps
+    as pressing "Run analysis" manually. Raises on failure rather than
     returning a Flask response; scheduler.run_overnight_once() catches
     that and records it as the overnight settings' last_error for the
     dashboard to show."""
@@ -253,6 +275,47 @@ def _run_overnight_analysis(slot):
                                result["held_reviews"])
     finally:
         analysis_lock.release()
+
+
+def _run_price_watch_analysis(fired):
+    """A dedicated, narrowly-scoped run for stocks whose overnight price
+    watch just triggered (see price_watches.py). `fired` is
+    {symbol: watch}.
+
+    Only these symbols are analysed — place_orders() is told exactly
+    that via `analyzed=`, so pending orders for every OTHER stock (from
+    tonight's earlier open-session run) are left completely untouched. A
+    narrowly-scoped run must never wipe out orders it has nothing new to
+    say about (see the portfolio engine's place_orders docstring)."""
+    symbols = list(fired)
+    provider = get_provider()
+    universe = [watchlists.get_stock(s) or
+               {"symbol": s, "name": s, "type": "stock", "flags": []}
+               for s in symbols]
+    positions = portfolio.current_positions()
+    holdings_for_review = {s: positions[s]["avg_cost"]
+                           for s in symbols if s in positions}
+    scope_name = "price watch: " + ", ".join(
+        f"{s} reached ${fired[s]['level']}" for s in symbols)
+
+    if not analysis_lock.acquire(blocking=False):
+        raise RuntimeError(
+            "Skipped — a manual analysis was already running when a "
+            "price watch triggered. The watch stays set for next time.")
+    try:
+        result = searcher.run_analysis(
+            provider, prices, universe=universe, scope_name=scope_name,
+            holdings=holdings_for_review)
+        portfolio.place_orders(result["rows"], result["shortlist"],
+                               result["held_reviews"], analyzed=symbols)
+    finally:
+        analysis_lock.release()
+        # One-shot: clear every watch this run acted on, win or lose —
+        # once acted upon, tonight's trigger is done being interesting.
+        # (Only reached if the lock was actually acquired — if it wasn't,
+        # the watch must stay set so it can fire again next tick.)
+        for s in symbols:
+            price_watches.clear_watch(s)
 
 
 @app.route("/api/run-analysis", methods=["POST"])
@@ -611,7 +674,45 @@ def api_ticker(symbol):
         "deep_dive": deep_dive.load_cached(symbol),
         "data_source": PRICE_SOURCE_NAME,
         "in_watchlists": watchlists.lists_containing(symbol),
+        "watch": price_watches.load().get(symbol),
     })
+
+
+# ── Overnight price watches: "tell me if this reaches $X tonight" ────────
+
+@app.route("/api/ticker/<path:symbol>/watch", methods=["POST"])
+def api_set_price_watch(symbol):
+    """{"level": float} — set (or replace) tonight's overnight price
+    watch for one stock. Direction is worked out automatically from
+    today's price vs the level Leon chose — see price_watches.py. Free:
+    this only saves a number; the AI spend happens later, if and only if
+    the level is actually reached (see app.py's overnight callback)."""
+    body = request.get_json(silent=True) or {}
+    try:
+        level = float(body.get("level"))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "Give a real price."}), 400
+    if level <= 0:
+        return jsonify({"status": "error", "message": "Give a real price."}), 400
+
+    current = prices.get_quote(symbol)["price"]
+    watch = price_watches.set_watch(symbol, level, current)
+    return jsonify({"status": "ok", "watch": watch})
+
+
+@app.route("/api/ticker/<path:symbol>/watch", methods=["DELETE"])
+def api_clear_price_watch(symbol):
+    """Remove tonight's price watch for one stock, if it has one."""
+    price_watches.clear_watch(symbol)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/watches")
+def api_watches():
+    """Every active overnight price watch, for the Stock Searcher panel's
+    compact list — checked once, at the overnight scheduler's middle
+    slot, not continuously."""
+    return jsonify({"status": "ok", "watches": price_watches.load()})
 
 
 # ── Watchlists & free-range search ──────────────────────────────────────
