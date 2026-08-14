@@ -295,17 +295,88 @@
   - 17 new tests (6 in `test_strategy_lab.py`, 7 in `test_scheduler.py`,
     4 in `test_bulletin.py`). 134 tests total, all offline.
 
+- **AI on Leon's own Claude account, overnight analysis, price watches**
+  (2026-08-14, planned in PLAN-claude-account-provider.md, approved same
+  day): Fable 5 verified live on Leon's Mac that a Claude subscription
+  isn't an API credit pool, but headless Claude Code (`claude -p`) IS a
+  legitimate bridge — billed to whichever account is logged in, no API
+  key involved. Sonnet and Opus (via `--model`) plus `--effort` all
+  confirmed working before any code was written.
+  - **`ClaudeCodeProvider`** (`dashboard/llm/claude_code_provider.py`,
+    new): a fourth provider, same one-method interface as the other
+    three. Shells out to `claude -p` with the prompt on stdin (not argv —
+    analysis prompts are large), all tools disabled, model/effort from
+    `CLAUDE_CODE_MODEL`/`CLAUDE_CODE_EFFORT` (Leon's choice: Opus at
+    medium). Missing binary (e.g. the Render cloud copy, which has
+    neither Claude Code nor a login) reuses `MissingKeyError` so every
+    route's existing friendly-error handling already covers it with zero
+    other changes.
+  - **Runtime provider choice** (`provider.py`): a storage-backed
+    "llm_settings" document, checked before falling back to `.env`'s
+    `LLM_PROVIDER` — lets the dashboard's own toggle switch providers
+    instantly, no restart, no file edit.
+  - **The connect/disconnect toggle** (Stock Searcher panel):
+    `GET`/`POST /api/llm` plus a checkbox — "Use my Claude account for AI
+    (Pro plan — Mac only)" — with a status line saying plainly where AI
+    runs right now. Saved choice is shared storage, so the cloud copy
+    shows it too (and gets the provider's own Mac-only message if an AI
+    button is pressed there while it's on).
+  - **Overnight market-hours analysis** (`scheduler.py`, extended to run
+    TWO background helpers on the existing 60-second thread): up to
+    three analysis runs a night while the US market is open, at three
+    ADJUSTABLE times (`rules.yaml`'s `scheduler.analysis_times_et`
+    defaults to 09:35/12:30/15:30 ET — just after open, mid-session, just
+    before close; Leon edits the actual times from the dashboard, with a
+    live Sydney-time hint next to each ET input). Gated hard on the
+    active provider being `claude_code` — an unattended loop must never
+    spend a key Leon toggled away from. If the Mac was asleep through
+    more than one slot, only ONE catch-up run fires (on the freshest
+    data), but every missed slot is marked caught up so it can't re-fire
+    minutes later. `/api/run-analysis`'s universe-building (pulling in
+    held-but-out-of-scope stocks for review) was factored into a shared
+    helper so the manual Run button and the overnight scheduler can't
+    drift apart.
+  - **Price watches** (`dashboard/price_watches.py`, new): one overnight
+    "tell me if this reaches $X tonight" alert per stock, set from its
+    own ticker page — direction (rising to, or falling to, the level) is
+    worked out automatically from the price at the moment it's saved.
+    Checked once, at the overnight scheduler's chronological MIDDLE run
+    (`scheduler.is_middle_slot`, correct even if Leon saves his three
+    times out of order): a fired watch dedicates that run to just the
+    triggered stock(s) with a real buy/sell verdict, labelled "price
+    watch: …" in the run history; watches are one-shot, cleared right
+    after the run acts on them.
+  - **Correctness fix found and closed before it could bite**: the
+    plan flagged, and this build confirmed, that `place_orders()`
+    unconditionally cancelled EVERY pending order on every call,
+    regardless of scope — a narrowly-scoped run (exactly what a
+    price-watch-triggered run is) would have silently wiped out an
+    unrelated stock's still-pending order from earlier in the night.
+    `place_orders()` now takes an optional `analyzed` set; orders for
+    symbols outside it are left untouched. A dedicated regression test
+    proves an out-of-scope pending order survives a scoped run.
+  - 76 new tests across 9 new/extended files, all offline (a fake
+    `subprocess.run`, monkeypatched storage, a fake AI provider — no real
+    `claude` process, no quota spent during the build). 210 tests total.
+    The one live spend: a single ~5-token "Reply with exactly: OK" through
+    the real CLI, confirming the whole path end-to-end.
+
 ## Next
 - Leon: create the free Neon database and paste DATABASE_URL into Render
   (if not already done — makes the cloud copy's orders/positions/journal
   persist).
+- Try the new toggle and overnight scheduler for a while and see how the
+  subscription's shared usage window holds up under three Opus-medium
+  runs a night — Leon's own call on whether to dial it back (fewer runs,
+  Sonnet instead of Opus) once there's real data on the weekly limit.
 - A track-record panel (+ 7am AEST email?) — the fill scheduler settles
   orders daily now, but nothing summarizes performance over time yet.
 - Decide: feed news headlines into the batch analysis so bull/bear cases
   rest on more than momentum (costs a bit more per run).
 - Try the Strategy Lab: write a strategy (or press Brainstorm), then Scan
   now to see whether current news matches it. Also try the Fix bulletin
-  (right-edge tab) and the new "settle orders daily" toggle.
+  (right-edge tab), "settle orders daily", and now the overnight analysis
+  + price watch toggles.
 
 ## How to run
 ```

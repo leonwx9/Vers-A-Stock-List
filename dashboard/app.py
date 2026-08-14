@@ -237,6 +237,10 @@ def _run_overnight_analysis(slot):
     slots = scheduler.effective_analysis_times(overnight_settings)
 
     if scheduler.is_middle_slot(slot, slots):
+        # `prices.get_quote` is whatever the live source's most recent
+        # daily bar says — Yahoo's price, cached a few minutes (see
+        # LiveSource) — plenty good enough for "has this level been
+        # reached tonight", which doesn't need to-the-second precision.
         watched_symbols = list(price_watches.load())
         current_prices = {s: prices.get_quote(s)["price"] for s in watched_symbols}
         fired = price_watches.check_all(current_prices)

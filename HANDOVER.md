@@ -76,12 +76,65 @@ your portfolio history and picks live on the Mac (and in git).
    (`**bold**`, `_underline_`, a dot point) into your own plain text. It
    starts with a few housekeeping notes from the Strategy Lab's build —
    edit or delete them like anything else you write there.
+9. **Use your own Claude account for AI** (checkbox in the Stock Searcher
+   panel) — switches the AI over from a paid key to whichever Claude
+   account is logged into Claude Code on this Mac. It spends your
+   subscription's own usage window (the same one claude.ai chat draws
+   from), not dollars — flip it off during a heavy chat day, back on
+   whenever. Only works locally; the cloud copy shows a friendly message
+   if you press an AI button there while it's on.
+10. **Analyse automatically overnight** (checkbox next to the one above,
+    only does anything while your Claude account is toggled on) — runs
+    up to three fresh analyses a night while the US market is open, at
+    three times you can edit right there (shown in ET, with a live
+    Sydney-time hint next to each; defaults to just after open,
+    mid-session, and just before close). Each run replaces the previous
+    run's pending orders, so the morning portfolio reflects the LAST
+    (closest-to-close) run of the night; earlier runs stay in the audit
+    trail. Needs the Mac to be awake — see "Keeping the Mac awake
+    overnight" below.
+11. **Price watches** (set from any ticker's own page; a compact list
+    also sits in the Stock Searcher panel) — "tell me if this stock
+    reaches $X tonight." One per stock; direction (rising to, or falling
+    to, the price) is worked out automatically from today's price when
+    you save it. Checked once, at the overnight scheduler's MIDDLE run:
+    if one has fired, that run gives just that stock a dedicated buy/sell
+    verdict at tonight's price instead of the usual full sweep, and the
+    watch clears itself afterwards (one-shot — set a new one any time).
 
 The portfolio graph grows one point per day the app is used — it needs
 weeks of routine before it says anything meaningful. Because you check the
 dashboard from Sydney, US market hours have always finished by the time
 you look — so "check what's happened since I last opened it" is exactly
 the same thing a real broker would tell you the next morning.
+
+## Keeping the Mac awake overnight
+
+The overnight scheduler (item 10 above) only fires while the Mac app is
+running AND the Mac itself is awake — a sleeping Mac can't run any
+background thread. Two ways to keep it awake for the night, either fine:
+
+- **Start the app with `caffeinate`** — macOS's own built-in stay-awake
+  command:
+  ```bash
+  caffeinate -is ./venv/bin/python dashboard/app.py
+  ```
+  The Mac won't sleep for as long as that command keeps running; close
+  the terminal window (or Ctrl-C) in the morning to let it sleep again.
+- **Or**, in System Settings → Energy (or Battery), turn on "Prevent
+  automatic sleeping when the display is off" while the Mac is plugged
+  in — a one-time setting, no special launch command needed.
+
+**If the Mac slept through part of the night anyway**, nothing is lost:
+the overnight scheduler itself catches up automatically, the moment the
+app is next running and awake — it's the background thread doing this,
+not anything you need to press. If more than one slot was missed, only
+ONE catch-up run fires (on the freshest prices available), not several
+stale ones. The status line under the overnight toggle shows the last
+run it actually completed, so you can tell at a glance whether last
+night's runs happened. (Price watches are only ever checked at the
+MIDDLE run specifically, so a watch stays set — unacted-on — until a
+night when the Mac is awake for that particular slot.)
 
 ## What it costs
 
@@ -91,10 +144,22 @@ the same thing a real broker would tell you the next morning.
   you can watch spend at openrouter.ai → Activity. A few dollars a month
   at hobby usage. The Lab's optional once-a-day auto-scan is OFF by
   default — turning it on adds ≈1-2¢/day, nothing until you flip it on.
+- **Using your own Claude account instead of a paid key** doesn't cost
+  dollars, but it spends your subscription's SHARED usage window — the
+  same 5-hour rolling window (plus a weekly cap) that claude.ai chat
+  draws from. One analysis run still ≈ 10 requests; running Opus (rather
+  than the default Sonnet) drains that window several times faster for
+  the same run. If you turn on the overnight scheduler, that's three
+  full analyses a night on top of anything you do by day — a real nightly
+  bite out of the window, which is exactly why the toggle exists: switch
+  back to a paid key (or just switch the account off) during a period
+  you're leaning on claude.ai chat heavily.
 - Prices (Yahoo), filings (EDGAR), and news headlines are free. Render and
   Tailscale are on free tiers.
-- The daily **order-fill scheduler** and the **Fix bulletin** cost nothing
-  — neither one ever calls the AI.
+- The daily **order-fill scheduler**, **price watches**, and the **Fix
+  bulletin** cost nothing on their own — none of them call the AI by
+  themselves (a price watch firing DOES trigger one AI analysis, same
+  cost as any other run, whichever provider is active at the time).
 
 ## When something breaks
 
@@ -112,6 +177,10 @@ the same thing a real broker would tell you the next morning.
 | A Lab strategy suggestion looks incomplete/never appears | the AI's suggestion was missing a required field (rare) | dropped automatically, not saved — press Brainstorm again |
 | "Settle orders daily" didn't fill something overnight | the Mac app wasn't running at 8am that day | no harm — it settles the moment you next open the dashboard, or automatically the next day the app is running |
 | Fix bulletin edit didn't save | a network hiccup while pressing Save | the status line under the note says so — try Save again |
+| "AI says limit reached" / a Claude-account run failed with a usage-limit message | your subscription's shared 5-hour or weekly window is used up | wait for the window to reset, or toggle back to a paid API key for now |
+| Claude-account AI errors on the cloud copy | expected — no server can log into your account | use the Mac, or toggle to a paid key there |
+| No overnight run happened last night | the Mac was asleep, the app wasn't running, or the toggle/account wasn't set up right | check the status line under the overnight toggle; see "Keeping the Mac awake overnight" above |
+| A price watch didn't fire even though the price was clearly reached | the overnight scheduler's middle run never happened that night (Mac asleep through it) | the watch is still set — it'll fire the next night the middle run actually happens |
 | Phone can't reach the Mac copy | Mac asleep or Tailscale off | wake the Mac, check the Tailscale menu-bar icon |
 | Cloud copy slow to load | free server waking up | wait ~50 s, it's normal |
 | Cloud copy forgot the portfolio | free server restarted | expected — the Mac copy remembers |
@@ -176,9 +245,10 @@ git add -A && git commit -m "what changed" && git push
 ## Where the bodies are buried
 
 - Secrets: `.env` (never committed) and Render's Environment tab.
-- Saved runs, portfolio, Strategy Lab journal/scans, the scheduler's own
-  setting, and the Fix bulletin's text: all in `dashboard/data/`
-  (gitignored, Mac only — or the cloud database if DATABASE_URL is set).
+- Saved runs, portfolio, Strategy Lab journal/scans, both schedulers'
+  settings, active price watches, the AI-provider toggle, and the Fix
+  bulletin's text: all in `dashboard/data/` (gitignored, Mac only — or
+  the cloud database if DATABASE_URL is set).
 - Audit trail of every analysis: `picks/` (committed).
 - Build history & decisions: `PROGRESS.md`; project rules: `CLAUDE.md`.
 
