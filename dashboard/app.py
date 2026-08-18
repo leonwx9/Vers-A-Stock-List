@@ -611,19 +611,25 @@ def api_overnight_settings():
 
 @app.route("/api/overnight", methods=["POST"])
 def api_overnight_settings_save():
-    """{"enabled": bool?, "times_et": [3 "HH:MM" strings]?} — either or
-    both at once. Free: this only decides WHEN the scheduler thread tries
-    to run — it still only actually fires while the toggle above is ALSO
-    set to Leon's own Claude account (the provider gate lives in
-    scheduler.py, checked fresh on every tick)."""
+    """{"enabled": bool?, "times_et": [3 "HH:MM" strings] | null?} — any
+    combination at once. `times_et: null` clears Leon's customised times
+    and reverts to rules.yaml's defaults (the "Reset to default times"
+    button) — a 3-item list customises them as before. Free: this only
+    decides WHEN the scheduler thread tries to run — it still only
+    actually fires while the toggle above is ALSO set to Leon's own
+    Claude account (the provider gate lives in scheduler.py, checked
+    fresh on every tick)."""
     body = request.get_json(silent=True) or {}
     settings = scheduler.load_overnight_settings()
     if "times_et" in body:
-        try:
-            scheduler.validate_analysis_times(body["times_et"])
-        except ValueError as e:
-            return jsonify({"status": "error", "message": str(e)}), 400
-        settings["times_et"] = body["times_et"]
+        if body["times_et"] is None:
+            settings["times_et"] = None
+        else:
+            try:
+                scheduler.validate_analysis_times(body["times_et"])
+            except ValueError as e:
+                return jsonify({"status": "error", "message": str(e)}), 400
+            settings["times_et"] = body["times_et"]
     if "enabled" in body:
         settings["enabled"] = bool(body["enabled"])
     scheduler.save_overnight_settings(settings)

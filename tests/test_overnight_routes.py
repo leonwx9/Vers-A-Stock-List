@@ -72,3 +72,22 @@ def test_post_overnight_can_set_enabled_and_times_together(client):
     data = res.get_json()
     assert data["settings"]["enabled"] is True
     assert data["effective_times_et"] == ["09:40", "12:00", "15:50"]
+
+
+def test_post_overnight_null_times_resets_to_rules_yaml_defaults(client):
+    # Customise the times first...
+    client.post("/api/overnight", json={"times_et": ["09:40", "12:00", "15:50"]})
+    assert client.get("/api/overnight").get_json()["effective_times_et"] == \
+        ["09:40", "12:00", "15:50"]
+
+    # ...then the "Reset to default times" button sends times_et: null.
+    res = client.post("/api/overnight", json={"times_et": None})
+    data = res.get_json()
+    assert data["status"] == "ok"
+    assert data["settings"]["times_et"] is None
+    default_times = data["effective_times_et"]
+    assert len(default_times) == 3
+    assert default_times != ["09:40", "12:00", "15:50"]
+
+    again = client.get("/api/overnight").get_json()
+    assert again["effective_times_et"] == default_times

@@ -75,12 +75,19 @@ async function loadExisting() {
    funded API key ─────────────────────────────────────────────────────── */
 const llmToggle = document.getElementById("llm-toggle");
 const llmStatus = document.getElementById("llm-status");
+const overnightSection = document.getElementById("overnight-section");
 
 function renderLlmSettings(data) {
   llmToggle.checked = data.provider === "claude_code";
   llmStatus.textContent = data.provider === "claude_code"
     ? "AI: your Claude account (uses your subscription's shared usage limits)"
     : `AI: ${data.provider === "openrouter" ? "OpenRouter key" : "Anthropic key"}`;
+  // Overnight analysis can only ever fire on Leon's own Claude account
+  // (see the provider gate in scheduler.py) — hide the whole section
+  // rather than show a control that can't do anything right now. Its
+  // own settings (enabled, times) are untouched in storage, so they're
+  // exactly as he left them if he switches the account back on later.
+  overnightSection.hidden = !llmToggle.checked;
 }
 
 async function loadLlmSettings() {
@@ -116,15 +123,17 @@ loadLlmSettings();
 const overnightToggle = document.getElementById("overnight-toggle");
 const overnightTimesBox = document.getElementById("overnight-times");
 const overnightStatus = document.getElementById("overnight-status");
+const overnightResetBtn = document.getElementById("overnight-reset-btn");
 
 /* The three ET run times are set relative to the US market, but Leon
-   reads a Sydney clock — this converts one "HH:MM" ET time into an
-   "≈ H:MMpm Sydney tonight" hint. The ET↔Sydney gap isn't a fixed number
-   (both zones observe daylight saving, on different dates), so rather
-   than hard-code an offset, this asks the browser's own timezone data
-   twice: a first guess, then a correction based on what that guess
-   actually shows in ET — accurate on any date, not just today. */
-function etTimeToSydneyHint(hhmm) {
+   reads a Sydney clock — this converts one "HH:MM" ET time into the
+   matching Sydney clock time (e.g. "11:35 PM"), shown plainly under each
+   picker. The ET↔Sydney gap isn't a fixed number (both zones observe
+   daylight saving, on different dates), so rather than hard-code an
+   offset, this asks the browser's own timezone data twice: a first
+   guess, then a correction based on what that guess actually shows in
+   ET — accurate on any date, not just today. */
+function etTimeToSydney(hhmm) {
   const [h, m] = hhmm.split(":").map(Number);
   const now = new Date();
   const nyParts = new Intl.DateTimeFormat("en-US", {
@@ -136,20 +145,25 @@ function etTimeToSydneyHint(hhmm) {
   }).format(guess);
   const [shownH, shownM] = shownEt.split(":").map(Number);
   const correctedMs = guess.getTime() + ((h * 60 + m) - (shownH * 60 + shownM)) * 60000;
-  const sydneyTime = new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("en-US", {
     timeZone: "Australia/Sydney", hour: "numeric", minute: "2-digit", hour12: true,
   }).format(new Date(correctedMs));
-  return `≈ ${sydneyTime} Sydney tonight`;
 }
 
 function renderOvernightTimes(times) {
   overnightTimesBox.innerHTML = times.map((t, i) => `
     <label class="time-slot">
       <input type="time" class="overnight-time-input" data-index="${i}" value="${esc(t)}">
-      <span class="hint">${esc(etTimeToSydneyHint(t))}</span>
+      <span class="hint">${esc(etTimeToSydney(t))}</span>
     </label>`).join("");
 
-  overnightTimesBox.querySelectorAll(".overnight-time-input").forEach((input) =>
+  overnightTimesBox.querySelectorAll(".overnight-time-input").forEach((input) => {
+    // Live-update the Sydney time the instant the picker value changes —
+    // purely client-side, no need to wait on the save round-trip below.
+    input.addEventListener("input", () => {
+      if (input.value) input.nextElementSibling.textContent = etTimeToSydney(input.value);
+    });
+
     input.addEventListener("change", async () => {
       const inputs = [...overnightTimesBox.querySelectorAll(".overnight-time-input")];
       const newTimes = inputs.map((el) => el.value);
@@ -170,12 +184,17 @@ function renderOvernightTimes(times) {
         renderOvernightTimes(times);
         overnightStatus.textContent = "⚠ Could not reach the server: " + err.message;
       }
-    }));
+    });
+  });
 }
 
 function renderOvernightSettings(data) {
   overnightToggle.checked = !!data.settings.enabled;
   renderOvernightTimes(data.effective_times_et);
+  // The 3 ET pickers (and the button to reset them) only matter — and
+  // only show — while overnight is on.
+  overnightTimesBox.hidden = !overnightToggle.checked;
+  overnightResetBtn.hidden = !overnightToggle.checked;
 
   const lastRuns = Object.values(data.settings.last_runs || {});
   const lastRunLine = lastRuns.length
@@ -212,6 +231,24 @@ overnightToggle.addEventListener("change", async () => {
   }
 });
 
+overnightResetBtn.addEventListener("click", async () => {
+  try {
+    const res = await fetch("/api/overnight", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ times_et: null }),
+    });
+    const data = await res.json();
+    if (data.status === "ok") {
+      renderOvernightSettings(data);
+      overnightStatus.textContent = "";
+    } else {
+      overnightStatus.textContent = "⚠ " + (data.message || "Could not reset the times.");
+    }
+  } catch (err) {
+    overnightStatus.textContent = "⚠ Could not reach the server: " + err.message;
+  }
+});
+
 loadOvernightSettings();
 
 /* ── Price watches: "tell me if this reaches $X tonight" ─────────────── */
@@ -228,7 +265,12 @@ function renderPriceWatches(watches) {
   const box = document.getElementById("price-watches");
   const symbols = Object.keys(watches);
   if (!symbols.length) {
-    box.innerHTML = "";
+    // Inside the settings modal, so show an explaining empty state rather
+    // than a blank gap.
+    box.innerHTML = `
+      <h4 class="settings-section-title">Price watches</h4>
+      <p class="setting-desc">None set — open any stock's page and use its
+        “Overnight price watch” box to add one.</p>`;
     return;
   }
   const rows = symbols.map((symbol) => {
@@ -245,7 +287,7 @@ function renderPriceWatches(watches) {
       </div>`;
   }).join("");
   box.innerHTML = `
-    <h3 class="subheading">Price watches <span class="hint">checked at the middle overnight run</span></h3>
+    <h4 class="settings-section-title">Price watches <span class="setting-desc">checked at the middle overnight run</span></h4>
     ${rows}`;
 
   box.querySelectorAll(".watch-remove-btn").forEach((btn) =>
@@ -257,6 +299,34 @@ function renderPriceWatches(watches) {
 }
 
 loadPriceWatches();
+
+/* ── The ⚙ settings modal ──────────────────────────────────────────────
+   Opens the dialog holding the AI-provider toggle, the overnight
+   scheduler, and the price-watch list — all populated already by the
+   load*() calls above, so opening it just reveals them. Closes on ✕, on
+   a backdrop click, or on Escape; focus moves in on open and back to the
+   gear on close, for keyboard/phone use. */
+const settingsModal = document.getElementById("settings-modal");
+const settingsBtn = document.getElementById("settings-btn");
+
+settingsBtn.addEventListener("click", () => {
+  settingsModal.hidden = false;
+  document.getElementById("settings-close-btn").focus();
+});
+
+function closeSettings() {
+  settingsModal.hidden = true;
+  settingsBtn.focus();
+}
+
+document.getElementById("settings-close-btn").addEventListener("click", closeSettings);
+settingsModal.addEventListener("click", (e) => {
+  // A click on the dimmed backdrop (the overlay itself, not the card) closes it.
+  if (e.target === settingsModal) closeSettings();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !settingsModal.hidden) closeSettings();
+});
 
 /* ── 2. Run a fresh analysis when the button is pressed ───────────────── */
 /* The dropdown NEXT TO the button decides what gets analysed — one

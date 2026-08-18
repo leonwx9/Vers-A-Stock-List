@@ -66,12 +66,11 @@
           <h2>Stock Searcher</h2>
           <p class="panel-subtitle">watchlisted stocks · bull vs bear · conviction scores · paper portfolio</p>
         </div>
-        <!-- Pick WHICH watchlist to analyse, then press Run. -->
+        <!-- Pick WHICH watchlist to analyse, then press Run. The ⚙ opens
+             the settings modal (AI provider, overnight runs, price watches). -->
         <div class="btn-row">
-          <label class="checkbox-label">
-            <input type="checkbox" id="llm-toggle">
-            Use my Claude account for AI (Pro plan — Mac only)
-          </label>
+          <button id="settings-btn" class="icon-btn" title="Analysis settings"
+                  aria-label="Analysis settings" aria-haspopup="dialog">⚙</button>
           <select id="analyze-scope" class="range-select" title="Which watchlist the analysis covers">
             <option value="all">All watchlists</option>
           </select>
@@ -81,24 +80,9 @@
 
       <!-- Status line: shows "running…", errors, or when the last run happened. -->
       <p id="analysis-status" class="status-line"></p>
-      <!-- Says which AI is in effect right now (your Claude account, or a paid key). -->
+      <!-- Always-visible indicator of which AI a Run will spend (your Claude
+           account, or a paid key) — the on/off toggle lives in ⚙ settings. -->
       <p id="llm-status" class="status-line"></p>
-
-      <!-- Overnight analysis: up to 3 automatic runs a night while the US
-           market is open, using Leon's own Claude account. Off by default;
-           the three ET times are adjustable (default: open/mid/close). -->
-      <div class="btn-row" style="margin-top:0.5rem">
-        <label class="checkbox-label">
-          <input type="checkbox" id="overnight-toggle">
-          Analyse automatically while the US market is open (3 runs/night — uses your Claude account; the Mac must be awake)
-        </label>
-      </div>
-      <div id="overnight-times" class="btn-row" style="margin-top:0.5rem"></div>
-      <p id="overnight-status" class="status-line"></p>
-
-      <!-- Every active overnight price watch — set from a ticker's own
-           page; checked once, at the middle overnight run. -->
-      <div id="price-watches" style="margin-top:0.5rem"></div>
 
       <!-- Top picks appear here as cards. -->
       <div id="shortlist"></div>
@@ -208,6 +192,59 @@
   </main>
 
   </div><!-- /.layout -->
+
+  <!-- ── Analysis settings modal ───────────────────────────────────────
+       Opened by the ⚙ in the Stock Searcher header. Everything that used
+       to crowd the top of that panel lives here now: which AI a Run
+       spends, the optional overnight scheduler, and the price-watch list.
+       A body-level element so the fixed overlay stacks above everything. -->
+  <div id="settings-modal" class="modal-overlay" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-header">
+        <h3 id="settings-title" class="subheading">Analysis settings</h3>
+        <button id="settings-close-btn" class="modal-close" title="Close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Which AI a Run (and the overnight scheduler) spends. -->
+        <section class="settings-section">
+          <h4 class="settings-section-title">AI provider</h4>
+          <div class="setting-row">
+            <span class="setting-title">Use my Claude account for AI</span>
+            <label class="switch" title="Use my Claude account for AI">
+              <input type="checkbox" id="llm-toggle">
+              <span class="switch-track"></span>
+            </label>
+          </div>
+        </section>
+
+        <!-- Overnight analysis: up to 3 automatic runs a night while the US
+             market is open, using your own Claude account. Off by default.
+             Needs Leon's Claude account switched on above — the whole
+             section is hidden otherwise (see renderLlmSettings in app.js).
+             The 3 time pickers only show while THIS switch is also on. -->
+        <section class="settings-section" id="overnight-section">
+          <h4 class="settings-section-title">Overnight analysis</h4>
+          <div class="setting-row">
+            <span class="setting-title">Analyse while the US market is open</span>
+            <label class="switch" title="Analyse automatically overnight">
+              <input type="checkbox" id="overnight-toggle">
+              <span class="switch-track"></span>
+            </label>
+          </div>
+          <div id="overnight-times" class="overnight-times"></div>
+          <button id="overnight-reset-btn" class="mini-btn" type="button">Reset to default times</button>
+          <p id="overnight-status" class="status-line"></p>
+        </section>
+
+        <!-- Active overnight price watches — each set from a ticker's own
+             page; checked once, at the middle overnight run. Its own
+             section header is rendered by renderPriceWatches() in app.js. -->
+        <section class="settings-section" id="price-watches"></section>
+
+      </div>
+    </div>
+  </div>
 
   <footer class="site-footer">
     Live market data · paper trading only · charts by TradingView Lightweight Charts™ · no investment advice
