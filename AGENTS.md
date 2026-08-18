@@ -1,4 +1,4 @@
-# CLAUDE.md — Stock Searcher (Version A)
+# AGENTS.md — Stock Searcher (Version A)
 
 This file is the project brain. Read it at the start of every session before doing anything else.
 
@@ -44,7 +44,7 @@ Each dated `picks/` file must leave space to fill in later: whether the pick was
 ## Sandbox verification rule
 Before suggesting any external tool, integration, or delivery method, confirm it actually works in this environment. If unsure, research/test first. Only propose a method that is verified to work, or has a tested fallback. (Example from a past project: Discord was unreachable from the sandbox — don't suggest things like that without checking.)
 
-## How to run (workflow rule for Claude sessions)
+## How to run (workflow rule for agent sessions)
 The dashboard runs itself via `launchd` (macOS's own auto-start system, set up 2026-08-18) — it's already running, at login, after crashes, all the time. **Never tell Leon to run the Terminal start command as a normal step; never leave the app stopped after your own edits.** After changing any code under `dashboard/`, restart it yourself with:
 ```bash
 launchctl kickstart -k gui/$(id -u)/com.leon.vers-a
@@ -53,6 +53,6 @@ Then Leon just refreshes the browser tab. Logs (both stdout and stderr) live at 
 
 ## Reminders list (action at the right phase — do not lose these)
 1. **Before Phase 2:** define risk categories and stock exclusions (see the leveraged/inverse/volatility products flagged in `STOCK_LIST.md`).
-2. **Before Phase 2:** resolve CMC Invest login access (I will provide screenshots — Claude is my eyes for anything behind a login).
+2. **Before Phase 2:** resolve CMC Invest login access (I will provide screenshots — Codex is my eyes for anything behind a login).
 3. **Before going live:** do a pretend test run — produce 5 picks with full reasoning and profit timeframes so I can sense-check output quality.
 4. **At the end of Version A:** ask me clarifying questions, then compile a replication manual (`.md`) for building Version A on any stock universe.

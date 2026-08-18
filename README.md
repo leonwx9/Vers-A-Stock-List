@@ -62,6 +62,10 @@ cp .env.example .env        # then edit .env and paste your API key in
 # → open http://localhost:5001
 ```
 
+On Leon's Mac this now happens automatically via `launchd` — see
+HANDOVER.md's "Keeping it running" section. The manual command above is
+still the right way to run it the first time, or on any other machine.
+
 The only key you *need* is one AI key (OpenRouter or Anthropic — see below).
 Prices (Yahoo Finance) and SEC filings (EDGAR) are free, no key. Your own
 Claude subscription is a fourth, key-less option — see below.

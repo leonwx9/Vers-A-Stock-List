@@ -10,13 +10,16 @@ One dashboard, three doors into it:
 
 | Door | When to use it | Remembers data? |
 |---|---|---|
-| `http://localhost:5001` on the Mac | building & tinkering | ✅ yes — the permanent record |
+| `http://localhost:5001` on the Mac | always running — building & tinkering | ✅ yes — the permanent record |
 | Tailscale icon on your iPhone | on the couch, Mac awake | ✅ same data as the Mac |
 | `https://vers-a.onrender.com` | anywhere, Mac off | ⚠️ resets when the free server restarts |
 
 The Mac copy is the source of truth. The cloud copy is a viewer that
 occasionally forgets; that's the price of the free tier, and it's fine —
-your portfolio history and picks live on the Mac (and in git).
+your portfolio history and picks live on the Mac (and in git). Since
+2026-08-18 the Mac copy **runs itself** — see "Keeping it running" below —
+so "always running" means exactly that, not "running if you remembered to
+start it."
 
 ## The routine
 
@@ -108,22 +111,50 @@ dashboard from Sydney, US market hours have always finished by the time
 you look — so "check what's happened since I last opened it" is exactly
 the same thing a real broker would tell you the next morning.
 
-## Keeping the Mac awake overnight
+## Keeping it running
+
+Since 2026-08-18 the dashboard **starts itself** — no more opening
+Terminal and running a command. macOS's own `launchd` (its built-in
+"always run this" system) starts it the moment you log in, and restarts
+it automatically if it ever crashes. You should almost never need to
+touch this — it's covered here for the rare times you do:
+
+- **Restart it after a code change** (only relevant if you're editing
+  the code yourself, or watching Claude do it):
+  ```bash
+  launchctl kickstart -k gui/$(id -u)/com.leon.vers-a
+  ```
+  Claude sessions know to run this automatically after touching
+  `dashboard/` — you shouldn't need to ask.
+- **Check it's running**: `launchctl print gui/$(id -u)/com.leon.vers-a`
+  (look for `state = running`), or just open http://localhost:5001.
+- **Logs** (if something ever looks wrong): `~/Library/Logs/vers-a.log`.
+- **Turn it off entirely** (rare — e.g. freeing port 5001 for something
+  else): `launchctl bootout gui/$(id -u)/com.leon.vers-a`. Turn it back
+  on with `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.leon.vers-a.plist`.
+- The config lives at `~/Library/LaunchAgents/com.leon.vers-a.plist` —
+  machine-specific, so it's not part of the git repo (a copy of its
+  settings: runs `venv/bin/python dashboard/app.py` from the project
+  folder, restarts on exit, logs to the path above).
+
+### Keeping the Mac awake overnight
 
 The overnight scheduler (item 10 above) only fires while the Mac app is
-running AND the Mac itself is awake — a sleeping Mac can't run any
-background thread. Two ways to keep it awake for the night, either fine:
+running AND the Mac itself is **awake** — a sleeping Mac can't run any
+background thread. launchd solves "is the app running" but not "is the
+Mac asleep" — those are two different things. Two ways to keep the Mac
+awake for the night, either fine:
 
-- **Start the app with `caffeinate`** — macOS's own built-in stay-awake
-  command:
+- **`caffeinate -is`** — macOS's own built-in stay-awake command, run on
+  its own now that the app itself starts automatically:
   ```bash
-  caffeinate -is ./venv/bin/python dashboard/app.py
+  caffeinate -is
   ```
   The Mac won't sleep for as long as that command keeps running; close
   the terminal window (or Ctrl-C) in the morning to let it sleep again.
 - **Or**, in System Settings → Energy (or Battery), turn on "Prevent
   automatic sleeping when the display is off" while the Mac is plugged
-  in — a one-time setting, no special launch command needed.
+  in — a one-time setting, no special command needed at all.
 
 **If the Mac slept through part of the night anyway**, nothing is lost:
 the overnight scheduler itself catches up automatically, the moment the
@@ -184,7 +215,8 @@ night when the Mac is awake for that particular slot.)
 | Phone can't reach the Mac copy | Mac asleep or Tailscale off | wake the Mac, check the Tailscale menu-bar icon |
 | Cloud copy slow to load | free server waking up | wait ~50 s, it's normal |
 | Cloud copy forgot the portfolio | free server restarted | expected — the Mac copy remembers |
-| Changed the code but nothing changed | server needs a real restart | `pkill -f dashboard/app.py`, start it again |
+| Changed the code but nothing changed | server needs a real restart | `launchctl kickstart -k gui/$(id -u)/com.leon.vers-a` (Claude sessions do this on their own after edits) |
+| Dashboard unreachable even on the Mac | launchd's copy crashed or isn't loaded | `launchctl print gui/$(id -u)/com.leon.vers-a` — if missing, `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.leon.vers-a.plist`; check `~/Library/Logs/vers-a.log` for why |
 
 If the page shows a long technical error, read the last line first — it
 usually says what's wrong in nearly-plain English.
@@ -245,6 +277,8 @@ git add -A && git commit -m "what changed" && git push
 ## Where the bodies are buried
 
 - Secrets: `.env` (never committed) and Render's Environment tab.
+- The always-on setup: `~/Library/LaunchAgents/com.leon.vers-a.plist`
+  (machine config, not in git) and its logs at `~/Library/Logs/vers-a.log`.
 - Saved runs, portfolio, Strategy Lab journal/scans, both schedulers'
   settings, active price watches, the AI-provider toggle, and the Fix
   bulletin's text: all in `dashboard/data/` (gitignored, Mac only — or
