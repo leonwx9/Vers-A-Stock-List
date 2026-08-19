@@ -1,6 +1,6 @@
 # Vers A — Stock Searcher & Event Scanner
 
-A private dashboard that does four things:
+A personal dashboard that does four things:
 
 1. **Watchlists + free search** — search any US-listed stock (plain lookup,
    no AI cost) and organise stocks into unlimited named, colour-tagged
@@ -123,15 +123,39 @@ login). It spends your subscription's own usage window, not a paid key.
 
 ## Phone & cloud
 
-- **Phone (private)**: install Tailscale on the Mac and the phone, run the
-  app, open `http://<mac-tailscale-name>:5001` in Safari → Share →
-  **Add to Home Screen**. Works anywhere; traffic stays private.
-- **Cloud**: the repo contains `render.yaml` — a Render.com free-tier
-  blueprint. Deploys automatically on every push to the `dashboard` branch.
-  Set `DASHBOARD_PASSWORD` there so the internet sees a login wall.
-  Free-tier caveats: ~50 s wake-up after idle, and saved files (portfolio
-  history, analysis runs) reset on restart — the Mac copy is the permanent
-  record.
+- **Phone (private, full control)**: install Tailscale on the Mac and the
+  phone, run the app, open `http://<mac-tailscale-name>:5001` in Safari →
+  Share → **Add to Home Screen**. Works anywhere on your private network;
+  it IS the Mac, so nothing is restricted.
+- **Cloud (public URL, read-only viewer)**: the repo contains
+  `render.yaml` — a Render.com free-tier blueprint. Deploys automatically
+  on every push to the `dashboard` branch. Set `DASHBOARD_PASSWORD` so the
+  internet sees a login wall, `DATABASE_URL` (same value as the Mac's
+  `.env`) so it shows your real live data instead of an empty app, and
+  `VIEWER_MODE=1` so it can look and set price watches / edit watchlists
+  but can't spend AI money or reset the portfolio. Free-tier caveat:
+  ~50 s wake-up after idle.
+
+## Make it your own
+
+Fork it, then swap out the parts that are specific to this build:
+
+- **Secrets & AI provider**: `.env` (never committed — copy `.env.example`
+  and fill it in). Bring your own free/paid AI key; Yahoo Finance and SEC
+  EDGAR need no key.
+- **Your own stock list & risk rules**: `STOCK_LIST.md` (the seed
+  watchlist) and `dashboard/config/rules.yaml` (starting cash, max
+  position size, stop-loss band — this build's numbers mirror one
+  specific Australian broker's whole-share/currency constraints; delete
+  or edit the comments referencing them if they don't apply to you).
+- **Your own AI instructions**: `CLAUDE.md`/`AGENTS.md` is the project
+  brief the AI agent reads first — rewrite it for your own goals, universe,
+  and delivery preferences (it's written as instructions FROM a specific
+  person, so a straight copy won't make sense until you make it yours).
+- **Your own hosting**: your own free Neon (or Supabase) database, your
+  own free Render deployment — nothing here is shared with anyone else's
+  copy. See "Phone & cloud" above.
+- MIT-licensed — see `LICENSE`.
 
 ## Tests
 
