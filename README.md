@@ -86,7 +86,8 @@ never reach GitHub.
 | `FLASK_SECRET_KEY` | keeps you logged in across restarts (any long random string) |
 | `DASHBOARD_DEBUG` | `1` = auto-reload on code edits + rich error pages, but reachable from THIS Mac only (the debugger can run code, so it must never face the network). Empty = normal mode, phone can connect |
 | `SEC_EDGAR_CONTACT` | optional "Name email" our EDGAR requests identify as |
-| `DATABASE_URL` | optional free cloud Postgres — set it and saved data (watchlists, portfolio…) lives there instead of local files, so the cloud copy survives restarts |
+| `DATABASE_URL` | a free cloud Postgres (Neon) connection string. Set on BOTH the Mac and Render with the SAME string, it's what makes the phone/cloud copy show the Mac's real live data instead of resetting — the Mac and the cloud read/write one shared database. Empty = plain local files (single machine only) |
+| `VIEWER_MODE` | set to `1` **on Render only**. Makes the cloud copy read-only: it can view everything and still set price watches / edit watchlists, but the server hard-refuses (403) anything that would spend AI money or wipe the shared portfolio. Never set this on the Mac |
 
 **Switching AI provider is two lines**: change `LLM_PROVIDER=openrouter` to
 `anthropic` and fill in `ANTHROPIC_API_KEY`. Nothing else changes.

@@ -361,10 +361,43 @@
     The one live spend: a single ~5-token "Reply with exactly: OK" through
     the real CLI, confirming the whole path end-to-end.
 
+- **Settings restyle, always-on Mac app, shared Neon database, and
+  viewer mode** (2026-08-18/19, planned in PLAN-settings-ui.md and
+  PLAN-always-on-and-viewer.md):
+  - **Settings restyle** (M0): the ⚙ Analysis-settings modal became a
+    proper settings page — iOS-style toggle switches, title+description
+    rows, sectioned with hairline dividers. Pure front-end restyle, IDs
+    and behaviour unchanged. Added a "Reset to default times" control for
+    the overnight schedule (`times_et: null` reverts to rules.yaml) + test.
+  - **Always-on via launchd** (M1): `~/Library/LaunchAgents/com.leon.vers-a.plist`
+    (machine config, not in git) runs the app at login and restarts it on
+    crash — no more manual Terminal command. New workflow rule in
+    CLAUDE.md/AGENTS.md: restart after edits with `launchctl kickstart -k
+    gui/$(id -u)/com.leon.vers-a`.
+  - **Shared Neon database** (M2): one free cloud Postgres now backs BOTH
+    the Mac and the Render copy (same `DATABASE_URL` on each), so the
+    phone/cloud shows real live data instead of resetting.
+    `migrate_to_neon.py` (one-off, re-runnable) copied all 14 documents up.
+    **Bug caught during M2**: setting `DATABASE_URL` in `.env` exposed
+    that tests importing `dashboard.app` leaked it into the whole pytest
+    process (app.py calls `load_dotenv()` at import), so tests that
+    monkeypatch `storage.DATA_DIR` were silently hitting the REAL
+    database. Root cause was one layer down — `dotenv`'s `override=False`
+    only skips keys already PRESENT, so deleting the var let a later
+    in-test `load_dotenv()` re-import it. Fixed in `tests/conftest.py`
+    (set it to empty string, autouse) + two regression tests; real data
+    restored via the migration script.
+  - **Viewer mode** (M3): `VIEWER_MODE=1` on Render only. Now that both
+    copies share one database, the cloud copy is locked read-only — a
+    `before_request` guard 403s ten money-spending/Mac-only routes before
+    the view runs, and the matching controls are hidden via a
+    `body.viewer-mode` CSS class (chosen over DOM-removal so app.js's
+    render helpers can't throw on missing nodes; the 403 is the real
+    enforcement). Still allowed on the viewer: viewing, price watches,
+    watchlist edits, journal notes, the Fix bulletin. 15 tests.
+  - 21 new tests total across the four milestones; 231 tests, all offline.
+
 ## Next
-- Leon: create the free Neon database and paste DATABASE_URL into Render
-  (if not already done — makes the cloud copy's orders/positions/journal
-  persist).
 - Try the new toggle and overnight scheduler for a while and see how the
   subscription's shared usage window holds up under three Opus-medium
   runs a night — Leon's own call on whether to dial it back (fewer runs,

@@ -8,18 +8,27 @@ yourself. (For install commands and settings, see README.md.)
 
 One dashboard, three doors into it:
 
-| Door | When to use it | Remembers data? |
+| Door | What it can do | Sees the same data? |
 |---|---|---|
-| `http://localhost:5001` on the Mac | always running — building & tinkering | ✅ yes — the permanent record |
-| Tailscale icon on your iPhone | on the couch, Mac awake | ✅ same data as the Mac |
-| `https://vers-a.onrender.com` | anywhere, Mac off | ⚠️ resets when the free server restarts |
+| `http://localhost:5001` on the Mac | **full control** — always running | ✅ the one shared database |
+| Tailscale icon on your iPhone (Mac awake) | full control (it's the Mac, over your private network) | ✅ same shared database |
+| `https://vers-a.onrender.com` anywhere | **read-only viewer** — look, plus set price watches & edit watchlists | ✅ same shared database |
 
-The Mac copy is the source of truth. The cloud copy is a viewer that
-occasionally forgets; that's the price of the free tier, and it's fine —
-your portfolio history and picks live on the Mac (and in git). Since
-2026-08-18 the Mac copy **runs itself** — see "Keeping it running" below —
-so "always running" means exactly that, not "running if you remembered to
-start it."
+Since 2026-08-19 the Mac and the cloud copy **share one database** (a free
+cloud Postgres called Neon), so the phone/cloud copy now shows your REAL
+live portfolio and analysis — no more resetting. The Mac is still where
+everything actually *happens*: the cloud copy is a **viewer**. It can look
+at anything, and it can still do the free things (set an overnight price
+watch, curate a watchlist — the Mac's overnight run honours those) — but
+it cannot spend AI money or wipe the portfolio. Those buttons are hidden
+there, and the server refuses them even if asked. Since 2026-08-18 the Mac
+copy also **runs itself** — see "Keeping it running" below.
+
+**Why the viewer is locked down:** because both copies now share one
+database, a "Run analysis" or "Reset" on the phone would hit your REAL
+data — so the cloud copy runs in viewer mode (the `VIEWER_MODE=1` setting
+in Render's Environment tab). If you ever need to actually run something,
+use the Mac (or the phone over Tailscale, which IS the Mac).
 
 ## The routine
 
@@ -214,7 +223,9 @@ night when the Mac is awake for that particular slot.)
 | A price watch didn't fire even though the price was clearly reached | the overnight scheduler's middle run never happened that night (Mac asleep through it) | the watch is still set — it'll fire the next night the middle run actually happens |
 | Phone can't reach the Mac copy | Mac asleep or Tailscale off | wake the Mac, check the Tailscale menu-bar icon |
 | Cloud copy slow to load | free server waking up | wait ~50 s, it's normal |
-| Cloud copy forgot the portfolio | free server restarted | expected — the Mac copy remembers |
+| A button (Run / Reset / Scan / Brainstorm) is missing on the phone | expected — the cloud copy is a read-only viewer | use the Mac (or the phone over Tailscale, which is the Mac) |
+| "This is the read-only cloud viewer" error | you (or a script) hit a blocked action on the cloud copy | that's the viewer refusing to spend money / change Mac settings — do it on the Mac |
+| Cloud copy shows old/blank data | it lost the shared DB connection (DATABASE_URL wrong/removed on Render, or Neon down) | check Render's Environment tab has the same DATABASE_URL as the Mac; check neon.tech is up |
 | Changed the code but nothing changed | server needs a real restart | `launchctl kickstart -k gui/$(id -u)/com.leon.vers-a` (Claude sessions do this on their own after edits) |
 | Dashboard unreachable even on the Mac | launchd's copy crashed or isn't loaded | `launchctl print gui/$(id -u)/com.leon.vers-a` — if missing, `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.leon.vers-a.plist`; check `~/Library/Logs/vers-a.log` for why |
 
@@ -225,9 +236,10 @@ usually says what's wrong in nearly-plain English.
 
 - **Add/remove a stock**: the search box and watchlist chips in the
   dashboard — no files involved. Risky products carry flags (`leveraged` /
-  `inverse` / `volatility`) in the catalogue (`dashboard/data/`
-  `watchlists.json`) so the portfolio refuses to buy them; newly-added
-  stocks start unflagged.
+  `inverse` / `volatility`) in the catalogue (now stored in the Neon
+  database as the `watchlists` document, not the old
+  `dashboard/data/watchlists.json` file) so the portfolio refuses to buy
+  them; newly-added stocks start unflagged.
 - **Trading rules**: `dashboard/config/rules.yaml` — starting cash, max $
   per position, shortlist size, scanner market-cap ceiling… each line is
   commented. `stop_loss_pct` is only the FALLBACK: the AI picks its own
@@ -279,6 +291,12 @@ git add -A && git commit -m "what changed" && git push
 - Secrets: `.env` (never committed) and Render's Environment tab.
 - The always-on setup: `~/Library/LaunchAgents/com.leon.vers-a.plist`
   (machine config, not in git) and its logs at `~/Library/Logs/vers-a.log`.
+- The live data now lives in the **Neon database** (the `DATABASE_URL`
+  connection string in `.env` and Render's Environment tab). The old
+  `dashboard/data/*.json` files are a one-time snapshot from the
+  migration day (2026-08-19) — a stale local backup, no longer written
+  to. `migrate_to_neon.py` re-copies the Mac's files into Neon if you
+  ever need to reset the database to a known state.
 - Saved runs, portfolio, Strategy Lab journal/scans, both schedulers'
   settings, active price watches, the AI-provider toggle, and the Fix
   bulletin's text: all in `dashboard/data/` (gitignored, Mac only — or
