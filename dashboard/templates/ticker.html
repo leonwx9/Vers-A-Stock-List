@@ -20,11 +20,12 @@
        static folder so the page works offline. -->
   <script src="{{ url_for('static', filename='vendor/lightweight-charts.standalone.production.js') }}"></script>
 </head>
-<body>
+<body{% if viewer_mode %} class="viewer-mode"{% endif %}>
 
   <header class="site-header">
     <a class="wordmark" href="/">Vers A</a>
     <span class="header-note">paper trading · no investment advice</span>
+    {% if viewer_mode %}<span class="viewer-badge" title="Deep dives are generated on the Mac">👁 Viewer · read-only</span>{% endif %}
     <button id="theme-btn" class="theme-btn" title="Switch to dark mode">☾</button>
   </header>
 

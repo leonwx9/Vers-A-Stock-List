@@ -68,6 +68,45 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 # Chrome assumes Lax when unset, but Safari doesn't — so say it explicitly.
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
+# ── Viewer mode (the cloud copy) ────────────────────────────────────────
+# Set VIEWER_MODE=1 ONLY on Render. Now that the Mac and the cloud copy
+# share one database, the cloud copy is no longer a harmless throwaway —
+# a "Run analysis" there would spend real AI money and a "Reset" would
+# wipe the REAL shared portfolio. Viewer mode makes the cloud copy
+# read-only for anything that spends money or is a Mac-only decision:
+# the buttons are hidden in the UI AND the routes below hard-refuse with
+# a 403 (belt and braces — hidden buttons alone aren't security).
+# Still allowed everywhere: viewing, price watches, watchlist edits,
+# Strategy Lab journal notes, the Fix bulletin — all free, and the Mac's
+# overnight run honours a watch or watchlist change made from the phone.
+app.config["VIEWER_MODE"] = os.getenv("VIEWER_MODE", "").strip() == "1"
+
+# The endpoint (view-function) names blocked in viewer mode. Every one is
+# a POST/DELETE; the matching GET/view lives in a different function name,
+# so read-only access is untouched. Two toggles the original plan didn't
+# name are included too (api_lab_settings, api_scheduler_settings): the
+# daily auto-scan toggle can make the Mac spend AI money, and both are
+# Mac-only decisions — Leon chose to block both (2026-08-19).
+VIEWER_BLOCKED_ENDPOINTS = {
+    "api_run_analysis",              # a full AI analysis run
+    "api_scan",                      # the AI-pivot EDGAR scan
+    "api_lab_brainstorm",            # Strategy Lab AI brainstorm
+    "api_lab_scan",                  # Strategy Lab AI setup scan
+    "api_deep_dive",                 # per-ticker AI deep dive (cached ones still VIEW)
+    "api_llm_settings_save",         # which AI a run spends (Mac-only)
+    "api_overnight_settings_save",   # overnight scheduler on/off + times (Mac-only)
+    "api_scheduler_settings",        # 8am order-fill toggle (Mac-only)
+    "api_lab_settings",              # daily auto-scan toggle (can spend AI on the Mac)
+    "api_portfolio_reset",           # wipes the (now shared) portfolio
+}
+
+
+@app.context_processor
+def inject_viewer_mode():
+    """Make `viewer_mode` available to every template, so the cloud copy
+    can hide the controls its server also refuses."""
+    return {"viewer_mode": app.config.get("VIEWER_MODE", False)}
+
 
 @app.before_request
 def require_login():
@@ -82,6 +121,21 @@ def require_login():
         # fetch() calls get a clear JSON error instead of a redirect page.
         return jsonify({"status": "error", "message": "Not logged in."}), 401
     return redirect(url_for("login"))
+
+
+@app.before_request
+def block_writes_in_viewer_mode():
+    """The hard stop behind viewer mode: refuse any money-spending or
+    Mac-only route on the cloud copy, no matter what the browser sends.
+    Runs after the login check and before the view, so a blocked call
+    never reaches the AI or the portfolio at all."""
+    if app.config.get("VIEWER_MODE") and request.endpoint in VIEWER_BLOCKED_ENDPOINTS:
+        return jsonify({
+            "status": "error",
+            "message": "This is the read-only cloud viewer — AI actions and "
+                       "settings changes happen on the Mac. This view is for "
+                       "looking, not spending.",
+        }), 403
 
 
 @app.route("/login", methods=["GET", "POST"])

@@ -19,11 +19,12 @@
        (no white flash). Also provides the ☾/☀ toggle logic. -->
   <script src="{{ url_for('static', filename='theme.js') }}"></script>
 </head>
-<body>
+<body{% if viewer_mode %} class="viewer-mode"{% endif %}>
 
   <header class="site-header">
     <a class="wordmark" href="/">Vers A</a>
     <span class="header-note">Stock Searcher &amp; Event Scanner · paper trading only · no investment advice</span>
+    {% if viewer_mode %}<span class="viewer-badge" title="AI actions and settings changes happen on the Mac">👁 Viewer · read-only</span>{% endif %}
     <button id="theme-btn" class="theme-btn" title="Switch to dark mode">☾</button>
   </header>
 
@@ -99,7 +100,7 @@
           <p class="panel-subtitle">$10,000 pretend money · orders plan a price, then fill themselves against real trading sessions · whole shares · stop-loss discipline</p>
         </div>
         <div class="btn-row">
-          <label class="checkbox-label">
+          <label class="checkbox-label" id="scheduler-toggle-label">
             <input type="checkbox" id="scheduler-toggle">
             Settle orders daily at 8am (while the app is running) — free, no AI
           </label>
@@ -166,7 +167,7 @@
           <h3 class="subheading">Active setups
             <span class="hint">news checked on demand — most days, nothing matches</span></h3>
           <div class="btn-row">
-            <label class="checkbox-label">
+            <label class="checkbox-label" id="lab-daily-label">
               <input type="checkbox" id="lab-daily-toggle">
               Auto-scan once a day (~1-2¢/day)
             </label>
@@ -206,8 +207,14 @@
       </div>
       <div class="modal-body">
 
+        {% if viewer_mode %}
+        <p class="viewer-note">You're on the read-only cloud viewer. AI provider
+          and overnight settings are decided on the Mac — only price watches
+          can be set here (the Mac's overnight run will honour them).</p>
+        {% endif %}
+
         <!-- Which AI a Run (and the overnight scheduler) spends. -->
-        <section class="settings-section">
+        <section class="settings-section" id="ai-provider-section">
           <h4 class="settings-section-title">AI provider</h4>
           <div class="setting-row">
             <span class="setting-title">Use my Claude account for AI</span>

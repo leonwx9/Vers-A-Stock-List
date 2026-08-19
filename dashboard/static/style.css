@@ -1125,3 +1125,42 @@ html { scroll-behavior: smooth; }
     border-radius: 0;
   }
 }
+
+/* ── Viewer mode (the read-only cloud copy) ────────────────────────────
+   Now that the Mac and the cloud share one database, the cloud copy must
+   not be able to spend AI money or wipe the real portfolio. The server
+   hard-refuses those routes with a 403 (see app.py) — these rules just
+   hide the now-pointless controls so the viewer never shows a dead
+   button. Free actions (price watches, watchlist edits, journal notes,
+   the Fix bulletin) stay fully visible and working. */
+body.viewer-mode #run-analysis-btn,
+body.viewer-mode #reset-btn,
+body.viewer-mode #scheduler-toggle-label,
+body.viewer-mode #scan-btn,
+body.viewer-mode #lab-scan-btn,
+body.viewer-mode #lab-brainstorm-btn,
+body.viewer-mode #lab-daily-label,
+body.viewer-mode #deep-dive-btn,
+body.viewer-mode #ai-provider-section,
+body.viewer-mode #overnight-section { display: none !important; }
+
+/* The little "read-only" badge in the header, and the note inside the
+   settings modal explaining where the hidden settings actually live. */
+.viewer-badge {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  white-space: nowrap;
+  align-self: center;
+}
+.viewer-note {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  background: var(--paper-dim);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 1rem;
+}
