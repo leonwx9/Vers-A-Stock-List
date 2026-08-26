@@ -3,13 +3,24 @@ database but must never spend AI money or wipe the shared portfolio.
 
 The security is the server-side 403 (before_request), which fires BEFORE
 the view runs — so every "blocked" test here is safe: it can never reach
-a real AI call or a real reset. Storage is redirected to a temp folder,
-and VIEWER_MODE is always restored afterwards (the Flask `app` is a shared
-singleton — a leaked flag would break other test files)."""
+a real AI call or a real reset. VIEWER_MODE is always restored afterwards
+(the Flask `app` is a shared singleton — a leaked flag would break other
+test files).
+
+The watchlists/portfolio singletons are explicitly replaced (not just
+storage.DATA_DIR redirected) because a couple of these tests exercise
+routes that are ALLOWED even in viewer mode (watchlist create, bulletin
+save) — conftest.py stops those routes' own get_doc() calls from ever
+reaching a real database, but app.py's `watchlists` object is built once
+at import and won't re-check the env, so it needs replacing directly too
+(see conftest.py's docstring for the full story, including the real
+"From the phone" watchlists this exact gap wrote into production once)."""
 
 import pytest
 
+import dashboard.app as app_module
 from dashboard.app import app, VIEWER_BLOCKED_ENDPOINTS
+from dashboard.watchlists.store import WatchlistStore
 
 # Every blocked endpoint's actual URL + method, so we exercise the real
 # routing, not just the name set.
@@ -31,6 +42,8 @@ BLOCKED_CALLS = [
 def client(tmp_path, monkeypatch):
     import dashboard.storage as storage
     monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(app_module, "watchlists", WatchlistStore(
+        state_path=tmp_path / "watchlists.json"))
     app.config["TESTING"] = True
     original = app.config.get("VIEWER_MODE", False)
     with app.test_client() as c:

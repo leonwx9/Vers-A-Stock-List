@@ -1,33 +1,42 @@
 """Test-wide safety net: the test suite must NEVER touch the real cloud
 database, no matter what's in .env.
 
-Several test modules import dashboard.app (to test its Flask routes), and
-app.py calls load_dotenv() at import time — which pulls Leon's real
-DATABASE_URL into os.environ for the rest of the pytest process the
-moment any such module is collected. Without this fixture, any OTHER
-test that monkeypatches storage.DATA_DIR (expecting to write into a temp
-folder) would silently ignore that and read/write Leon's REAL production
-Neon database instead — which is exactly what happened once already
-(2026-08-19, caught because 17 tests failed against unexpectedly-real
-data; fixed by re-running migrate_to_neon.py to restore it).
+THE MODULE-LEVEL LINE BELOW (not the fixture) is the actual fix. dashboard/
+app.py builds its `watchlists` and `portfolio` objects exactly ONCE, the
+moment it's first imported — e.g. `watchlists = WatchlistStore()`, which
+calls storage.get_doc() once and keeps that connection forever. Several
+test files import dashboard.app to test its Flask routes; pytest imports
+every test module during COLLECTION, before running any fixture (even an
+autouse one) — so by the time any fixture could clear DATABASE_URL, those
+singletons had already locked onto Leon's real Neon database. A fixture
+alone was tried and failed (2026-08-19): it protects code that calls
+get_doc() fresh inside a test, but not objects already built at import.
+Confirmed damage from that gap: every full test-suite run silently
+created a real "From the phone" watchlist in production (test_viewer_mode
+exercises a real, allowed-even-in-viewer-mode watchlist-create route) —
+5 copies before this was caught and cleaned up.
 
-Set to an EMPTY STRING, not deleted — several functions under test
-(get_provider(), current_provider_name()) call load_dotenv() again
-partway through their own execution. dotenv's default override=False
-only skips a key that's already PRESENT in os.environ, regardless of its
-value — so delenv() leaves the door open for a later load_dotenv() call
-inside the test to silently re-import the real DATABASE_URL from disk
-(confirmed happening: get_provider() built a real ClaudeCodeProvider off
-Leon's actual toggle choice in Neon instead of the test's own env/temp
-storage). An empty string is "already present" as far as dotenv is
-concerned, so it can never be re-populated once this fixture runs.
+Setting os.environ here, as plain module-level code, runs when pytest
+loads THIS conftest.py — which always happens before it imports any test
+module in this directory, so dashboard.app's load_dotenv() finds
+DATABASE_URL already present (as "") and — per dotenv's override=False
+default, which only skips a key already PRESENT, regardless of its value
+— never overwrites it. That's what keeps the get_doc() calls inside
+WatchlistStore()/PaperPortfolio() honest at import time.
 
-autouse + function-scoped so it's set immediately before EVERY test body
-runs, regardless of when or how many times load_dotenv() already
-populated it during collection.
+The fixture below is a second, narrower layer: it re-applies the same
+empty value before every individual test body, because a few functions
+under test (get_provider(), current_provider_name()) call load_dotenv()
+again mid-execution, and monkeypatch's teardown between tests would
+otherwise let a later real load_dotenv() call have something to (not)
+override. Belt and braces — the module-level line is what matters most.
 """
 
+import os
+
 import pytest
+
+os.environ["DATABASE_URL"] = ""
 
 
 @pytest.fixture(autouse=True)
