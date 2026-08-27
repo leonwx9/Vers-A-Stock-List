@@ -144,7 +144,15 @@ touch this — it's covered here for the rare times you do:
 - The config lives at `~/Library/LaunchAgents/com.leon.vers-a.plist` —
   machine-specific, so it's not part of the git repo (a copy of its
   settings: runs `venv/bin/python dashboard/app.py` from the project
-  folder, restarts on exit, logs to the path above).
+  folder, restarts on exit, logs to the path above, and sets `PATH` to
+  `/Users/leonwu/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`
+  — **required** so the app can find the `claude` CLI for the "use my
+  Claude account" toggle; launchd processes don't inherit Terminal's
+  PATH the way a manually-started app does. Caught live 2026-08-27: the
+  toggle failed with "Your Claude account can only be used on the Mac"
+  even ON the Mac, because `shutil.which("claude")` came back empty
+  under launchd's bare PATH. A plist edit needs a full reload to take
+  effect — `bootout` then `bootstrap`, NOT just `kickstart -k`.
 
 ### Keeping the Mac awake overnight
 
@@ -218,6 +226,7 @@ night when the Mac is awake for that particular slot.)
 | "Settle orders daily" didn't fill something overnight | the Mac app wasn't running at 8am that day | no harm — it settles the moment you next open the dashboard, or automatically the next day the app is running |
 | Fix bulletin edit didn't save | a network hiccup while pressing Save | the status line under the note says so — try Save again |
 | "AI says limit reached" / a Claude-account run failed with a usage-limit message | your subscription's shared 5-hour or weekly window is used up | wait for the window to reset, or toggle back to a paid API key for now |
+| "Your Claude account can only be used on the Mac" even though you ARE on the Mac | launchd's copy of the app can't find the `claude` CLI on its `PATH` (a plist edit removed/never had it) | check the plist has the `PATH` line above, then reload with `bootout` + `bootstrap` (not `kickstart -k` — that doesn't re-read the file) |
 | Claude-account AI errors on the cloud copy | expected — no server can log into your account | use the Mac, or toggle to a paid key there |
 | No overnight run happened last night | the Mac was asleep, the app wasn't running, or the toggle/account wasn't set up right | check the status line under the overnight toggle; see "Keeping the Mac awake overnight" above |
 | A price watch didn't fire even though the price was clearly reached | the overnight scheduler's middle run never happened that night (Mac asleep through it) | the watch is still set — it'll fire the next night the middle run actually happens |
